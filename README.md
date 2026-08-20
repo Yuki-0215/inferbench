@@ -2,6 +2,20 @@
 
 InferBench Local 是面向 vLLM、SGLang 和其他 OpenAI-compatible 推理服务的本地压测与可视化工作台。控制面、原始请求指标和实验历史都保留在本机；被测服务可以部署在本机、局域网或云端。
 
+## 效果展示
+
+### 压测工作台
+
+实时查看吞吐、TTFT、P95 延迟、成功率、请求分布与 Token 生成速度，并在右侧切换历史实验。
+
+![InferBench 压测工作台](docs/images/inferbench-dashboard.png)
+
+### 真实推理服务压测
+
+InferBench 通过 OpenAI-compatible API 对远端 vLLM 服务持续发起并发流式请求，服务端日志可同步观察生成吞吐、请求状态和推测解码指标。
+
+![vLLM 推理服务压测日志](docs/images/vllm-benchmark-runtime.png)
+
 ## 能力
 
 - 对 `/v1/chat/completions` 发起真实 SSE 流式并发请求
