@@ -1,0 +1,22 @@
+.DS_Store
+.venv/
+.pytest_cache/
+__pycache__/
+*.py[cod]
+.coverage
+htmlcov/
+
+# Local benchmark state and runtime output
+data/
+docker-data/*
+!docker-data/.gitkeep
+*.db
+*.db-shm
+*.db-wal
+*.log
+
+# Generated UI artifacts and internal working notes
+artifacts/
+task_plan.md
+findings.md
+progress.md

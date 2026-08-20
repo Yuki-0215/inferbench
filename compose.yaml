@@ -1,0 +1,14 @@
+services:
+  inferbench:
+    build:
+      context: .
+    image: ${INFERBENCH_IMAGE:-inferbench-local:latest}
+    environment:
+      - INFERENCE_API_KEY
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./docker-data:/data
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true

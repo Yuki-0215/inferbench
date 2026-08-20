@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="Local-first benchmark console for vLLM and SGLang">
+  <title>InferBench Local</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%2311130f'/%3E%3Cpath d='M14 14h10v36H14zm16 0h12c7 0 11 4 11 9 0 4-2 7-6 8 5 1 8 4 8 9 0 6-5 10-13 10H30zm10 14c3 0 4-1 4-3s-1-3-4-3h-1v6zm1 14c3 0 5-1 5-4s-2-4-5-4h-2v8z' fill='%23dfff52'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/styles.css?v=20260820-2">
+</head>
+<body>
+  <div class="noise" aria-hidden="true"></div>
+  <header class="masthead">
+    <a class="brand" href="#" aria-label="InferBench 首页">
+      <span class="brand-mark">IB</span>
+      <span><strong>InferBench</strong><small>Inference performance studio</small></span>
+    </a>
+    <div class="masthead-meta">
+      <span class="connection"><i id="healthDot"></i><span id="healthText">连接中</span></span>
+      <span class="clock" id="clock">--:--:-- CST</span>
+      <a class="docs-link" href="/docs" target="_blank" rel="noreferrer">API ↗</a>
+    </div>
+  </header>
+
+  <main class="shell">
+    <aside class="control-panel">
+      <div class="section-label"><span>01</span> BENCHMARK SETUP</div>
+      <h1>推理性能<br><em>实验台</em></h1>
+      <p class="lede">连接云端或局域网推理服务。配置、样本与分析结果始终保留在本机。</p>
+
+      <div class="presets" aria-label="端点预设">
+        <button class="preset active" type="button" data-preset="mock">Mock</button>
+        <button class="preset" type="button" data-preset="vllm">vLLM</button>
+        <button class="preset" type="button" data-preset="sglang">SGLang</button>
+      </div>
+
+      <form id="runForm">
+        <label class="field wide">
+          <span>实验名称</span>
+          <input name="name" value="Baseline · demo" maxlength="80" required>
+        </label>
+        <label class="field wide">
+          <span>服务地址 <small>支持 /v1/models</small></span>
+          <input name="endpoint" value="http://127.0.0.1:8080/mock/v1/chat/completions" spellcheck="false" required>
+          <button id="discoverBtn" class="discover-button" type="button">
+            <span>⌁</span>
+            <strong>检测服务并自动填写模型</strong>
+            <small>支持直接粘贴 /v1/models</small>
+          </button>
+        </label>
+        <div class="field-row">
+          <label class="field">
+            <span>框架</span>
+            <select name="framework">
+              <option value="vllm">vLLM</option>
+              <option value="sglang">SGLang</option>
+              <option value="openai-compatible">OpenAI compatible</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>模型</span>
+            <input name="model" value="demo-model" required>
+          </label>
+        </div>
+        <div class="field-row">
+          <label class="field">
+            <span>并发矩阵</span>
+            <input name="concurrency_levels" value="1, 2, 4, 8" inputmode="numeric" required>
+          </label>
+          <label class="field">
+            <span>每档轮次</span>
+            <input name="repetitions" type="number" min="3" max="20" value="3" required>
+          </label>
+        </div>
+        <div class="field-row">
+          <label class="field"><span>每轮请求数</span><input name="requests" type="number" min="1" max="10000" value="128" required></label>
+          <label class="field">
+            <span>Max tokens</span>
+            <input name="max_tokens" type="number" min="1" max="8192" value="32" required>
+          </label>
+        </div>
+        <details class="advanced">
+          <summary>凭据与高级设置 <span>+</span></summary>
+          <div class="advanced-body">
+            <label class="field wide">
+              <span>API Key（仅驻留内存）</span>
+              <input name="api_key" type="password" autocomplete="off" placeholder="sk-…">
+            </label>
+            <label class="field wide">
+              <span>或 Key 环境变量名</span>
+              <input name="api_key_env" placeholder="INFERENCE_API_KEY" spellcheck="false">
+            </label>
+            <div class="field-row">
+              <label class="field"><span>Warmup</span><input name="warmup_requests" type="number" min="0" max="100" value="1"></label>
+              <label class="field"><span>Timeout / s</span><input name="timeout_s" type="number" min="1" max="1800" value="120"></label>
+            </div>
+            <label class="field wide">
+              <span>extra_body JSON</span>
+              <textarea name="extra_body" rows="3" spellcheck="false">{}</textarea>
+            </label>
+          </div>
+        </details>
+        <label class="field wide prompt-field">
+          <span>Prompts <small>每行一个，循环使用</small></span>
+          <textarea name="prompts" rows="4" required>Explain why batching improves LLM inference throughput.
+Compare vLLM and SGLang in two concise points.
+Write a Python percentile function.</textarea>
+        </label>
+        <button class="launch" type="submit">
+          <span>开始压测</span><b>RUN ↗</b>
+        </button>
+        <p class="form-note" id="formNote">C1 / C2 / C4 / C8 每档串行跑 3 轮；Compare 展示均值与稳定性。</p>
+      </form>
+    </aside>
+
+    <section class="workspace">
+      <nav class="view-tabs" aria-label="页面视图">
+        <button class="view-tab active" data-view="observe">实验监测 <span id="runCount">0</span></button>
+        <button class="view-tab" data-view="compare">性能对比 <span id="compareCount">0</span></button>
+        <div class="local-badge">数据仅存本地</div>
+      </nav>
+
+      <section id="observeView" class="view active">
+        <div id="emptyState" class="empty-state">
+          <div class="radar" aria-hidden="true"><i></i><i></i><i></i></div>
+          <span>READY TO BENCHMARK</span>
+          <h2>开始第一组推理实验</h2>
+          <p>默认已连接内置 Mock 服务。启动后，这里会实时展示延迟、吞吐和每个请求的原始样本。</p>
+        </div>
+
+        <div id="detailView" class="detail-view hidden">
+          <div id="detailCapture" class="detail-capture">
+          <div class="run-heading">
+            <div>
+              <div class="eyebrow" id="runEyebrow">RUN / —</div>
+              <h2 id="runTitle">—</h2>
+              <p id="runSubtitle">—</p>
+            </div>
+            <div class="run-actions">
+              <button id="copyScreenshotBtn" class="capture-button" type="button" data-capture-hide title="复制包含指标和测试图的 PNG">
+                <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="6" y="6" width="10" height="10" rx="2"></rect><path d="M4 13H3a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"></path></svg>
+                <span>复制测试图</span>
+              </button>
+              <span class="status-chip" id="runStatus">—</span>
+              <button id="cancelBtn" class="text-button hidden" type="button">停止本轮</button>
+              <button id="cancelSuiteBtn" class="text-button danger hidden" type="button">停止整组</button>
+            </div>
+          </div>
+          <div class="progress-track"><i id="progressBar"></i></div>
+          <div id="queueNotice" class="queue-notice hidden"></div>
+          <div class="metric-grid" id="metricGrid"></div>
+          <div class="chart-grid">
+            <article class="chart-card latency-card">
+              <header><div><span>LATENCY DISTRIBUTION</span><h3>请求延迟分布</h3></div><b id="latencyUnit">MS</b></header>
+              <div id="histogram" class="chart"></div>
+            </article>
+            <article class="chart-card timeline-card">
+              <header><div><span>REQUEST TRACE</span><h3>请求时序</h3></div><b>WALL TIME</b></header>
+              <div id="timeline" class="chart"></div>
+            </article>
+            <article class="chart-card token-speed-card">
+              <header>
+                <div><span>TOKEN THROUGHPUT OVER TIME</span><h3>Token 生成速度</h3></div>
+                <div class="token-chart-meta"><b>TOK/S · EST.</b><span id="tokenSpeedMeta">—</span></div>
+              </header>
+              <div id="tokenSpeedChart" class="chart token-speed-chart"></div>
+              <p class="chart-method">按每个请求的 TTFT、完成时刻与输出 token 数估算；虚线为整轮平均吞吐。</p>
+            </article>
+          </div>
+          </div>
+          <article class="sample-card">
+            <header><div><span>RAW SAMPLES</span><h3>请求样本</h3></div><div class="sample-actions"><button id="exportCsvBtn" class="text-button" type="button">导出 CSV</button><button id="exportJsonBtn" class="text-button" type="button">导出 JSON</button><button id="deleteBtn" class="text-button danger" type="button">删除实验</button></div></header>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>#</th><th>状态</th><th>TTFT</th><th>Latency</th><th>Tokens</th><th>来源</th><th>错误</th></tr></thead>
+                <tbody id="sampleRows"></tbody>
+              </table>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="compareView" class="view">
+        <div class="compare-head">
+          <div><div class="section-label"><span>02</span> PERFORMANCE REVIEW</div><h2>在同一基准上比较</h2></div>
+          <button id="compareBtn" class="compare-button" type="button" disabled>选择至少 2 个实验</button>
+        </div>
+        <div id="compareWarnings"></div>
+        <div id="compareResults" class="compare-results">
+          <p class="compare-placeholder">在右侧历史记录勾选 2–8 个实验。第一个被选中的实验作为基线。</p>
+        </div>
+      </section>
+    </section>
+
+    <aside class="history-panel">
+      <div class="history-head">
+        <div><span>LOCAL ARCHIVE</span><h2>实验记录</h2></div>
+        <button id="refreshBtn" title="刷新" type="button">↻</button>
+      </div>
+      <div id="historyList" class="history-list"></div>
+      <footer>
+        <i></i>
+        <p><strong>SQLite / WAL</strong><span id="dataPath">./data/inferbench.db</span></p>
+      </footer>
+    </aside>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="/static/app.js?v=20260820-4" defer></script>
+</body>
+</html>

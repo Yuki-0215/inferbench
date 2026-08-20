@@ -1,0 +1,16 @@
+.git
+.gitignore
+.venv
+.pytest_cache
+__pycache__
+*.py[cod]
+.coverage
+.DS_Store
+data
+docker-data
+artifacts
+tests
+ARCHITECTURE.md
+task_plan.md
+findings.md
+progress.md
