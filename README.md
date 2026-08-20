@@ -1,5 +1,7 @@
 # InferBench Local
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-159a74.svg)](LICENSE)
+
 InferBench Local 是面向 vLLM、SGLang 和其他 OpenAI-compatible 推理服务的本地压测与可视化工作台。控制面、原始请求指标和实验历史都保留在本机；被测服务可以部署在本机、局域网或云端。
 
 ## 效果展示
@@ -209,3 +211,7 @@ Compare 会先按并发档对重复轮次求均值，再进行评分，并展示
 - 首版只支持 OpenAI Chat Completions SSE 协议。
 - 服务未返回流式 `usage` 时会用字符数估算 token，并在结果中标记。
 - 当前不采集服务端 GPU、显存、功耗；这些指标需要在被测环境部署 telemetry sidecar。
+
+## 开源协议
+
+本项目采用 [MIT License](LICENSE)，可自由使用、修改和分发，但须保留原始版权与许可声明。
