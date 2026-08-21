@@ -28,6 +28,7 @@ def main() -> None:
         assert page.locator('[name="concurrency_levels"]').input_value() == "1, 2, 4, 8"
         assert page.locator('[name="repetitions"]').input_value() == "3"
         assert page.locator('[name="requests"]').input_value() == "128"
+        assert page.locator('[name="max_tokens"]').input_value() == "128"
 
         cancel_ids = []
         for repetition in range(1, 4):

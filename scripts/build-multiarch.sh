@@ -4,7 +4,7 @@ set -euo pipefail
 # Build and optionally publish a manifest list for the two primary server
 # architectures. Override IMAGE, TAG, PLATFORMS or BUILDER when needed.
 IMAGE="${IMAGE:-uhub.service.ucloud.cn/openbayes_common/inferbench}"
-TAG="${TAG:-v0.1.3}"
+TAG="${TAG:-v0.1.5}"
 PLATFORMS="${PLATFORMS:-linux/amd64,linux/arm64}"
 BUILDER="${BUILDER:-inferbench-multiarch}"
 PUSH="${PUSH:-1}"

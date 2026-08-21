@@ -22,11 +22,13 @@ InferBench 通过 OpenAI-compatible API 对远端 vLLM 服务持续发起并发�
 
 - 对 `/v1/chat/completions` 发起真实 SSE 流式并发请求
 - 默认一键运行 `1 / 2 / 4 / 8` 四档并发矩阵，每档至少 3 轮
+- 默认最多生成 `128 tokens`，兼顾标准吞吐测试的有效性与执行时间
 - 采集 TTFT、端到端延迟、TPOT、输出 token/s、request/s 和成功率
 - SQLite 本地持久化请求级样本，API Key 不落盘
 - 本地仪表盘查看运行进度、延迟分布、错误与历史记录
 - 展示压测期间的 Token 生成速度曲线、峰值和整轮平均 tok/s 基准线
 - 支持立即停止本轮或整组矩阵；停止会取消排队任务并中断正在读取的流式连接
+- 支持批量选择和删除多个已结束实验，运行中或排队记录会自动保护
 - 选择 2–8 次实验，以首项为基线对比并生成透明综合评分
 - 内置 mock OpenAI endpoint，无 GPU 也能跑通完整流程
 
@@ -57,7 +59,7 @@ docker compose logs -f inferbench
 ### 构建并发布多架构镜像
 
 仓库发布脚本默认构建 `linux/amd64` 和 `linux/arm64`，并推送为
-`uhub.service.ucloud.cn/openbayes_common/inferbench:v0.1.3`。先登录 UHub：
+`uhub.service.ucloud.cn/openbayes_common/inferbench:v0.1.5`。先登录 UHub：
 
 ```bash
 docker login uhub.service.ucloud.cn
@@ -67,8 +69,8 @@ docker login uhub.service.ucloud.cn
 使用其他标签或镜像名：
 
 ```bash
-TAG=v0.1.3 ./scripts/build-multiarch.sh
-IMAGE=uhub.service.ucloud.cn/openbayes_common/inferbench TAG=v0.1.3 \
+TAG=v0.1.5 ./scripts/build-multiarch.sh
+IMAGE=uhub.service.ucloud.cn/openbayes_common/inferbench TAG=v0.1.5 \
   ./scripts/build-multiarch.sh
 ```
 
@@ -81,9 +83,9 @@ PUSH=0 ./scripts/build-multiarch.sh
 目标机器可直接使用发布镜像启动：
 
 ```bash
-INFERBENCH_IMAGE=uhub.service.ucloud.cn/openbayes_common/inferbench:v0.1.3 \
+INFERBENCH_IMAGE=uhub.service.ucloud.cn/openbayes_common/inferbench:v0.1.5 \
   docker compose pull
-INFERBENCH_IMAGE=uhub.service.ucloud.cn/openbayes_common/inferbench:v0.1.3 \
+INFERBENCH_IMAGE=uhub.service.ucloud.cn/openbayes_common/inferbench:v0.1.5 \
   docker compose up -d
 ```
 

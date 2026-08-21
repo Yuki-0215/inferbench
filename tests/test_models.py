@@ -17,3 +17,7 @@ def test_extra_body_cannot_override_protocol_fields():
 def test_models_endpoint_is_normalized_to_chat_completions():
     config = RunCreate(endpoint="https://example.com/v1/models")
     assert config.endpoint == "https://example.com/v1/chat/completions"
+
+
+def test_default_generation_limit_is_benchmark_sized():
+    assert RunCreate().max_tokens == 128

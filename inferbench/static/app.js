@@ -1,7 +1,7 @@
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 
-const state = { runs: [], selectedId: null, selected: null, compareIds: [], view: "observe", poller: null, loading: false, tokenPoint: null };
+const state = { runs: [], selectedId: null, selected: null, compareIds: [], bulkMode: false, deleteIds: [], view: "observe", poller: null, loading: false, tokenPoint: null };
 const statusLabel = { queued: "排队", running: "运行中", completed: "已完成", failed: "失败", cancelled: "已取消" };
 
 function esc(value) {
@@ -97,8 +97,11 @@ function renderHistory() {
   if (!state.runs.length) {
     list.innerHTML = `<div class="history-empty">尚无本地实验记录。运行一次 mock 压测后，这里会保留可比较的历史。</div>`;
     syncCompareButton();
+    syncBulkControls();
     return;
   }
+  const deletableIds = new Set(state.runs.filter(item => !["queued","running"].includes(item.run.status)).map(item => item.run.id));
+  state.deleteIds = state.deleteIds.filter(id => deletableIds.has(id));
   const activeOrder = state.runs
     .filter(item => ["queued","running"].includes(item.run.status))
     .sort((a,b) => a.run.created_at - b.run.created_at);
@@ -106,11 +109,16 @@ function renderHistory() {
   list.innerHTML = state.runs.map(item => {
     const run = item.run, summary = item.summary;
     const checked = state.compareIds.includes(run.id);
+    const deleteChecked = state.deleteIds.includes(run.id);
+    const deleteLocked = ["queued","running"].includes(run.status);
     const statusText = run.status === "queued"
       ? `排队 #${queuePositions.get(run.id) || "—"}/${activeOrder.length}`
       : statusLabel[run.status] || run.status;
-    return `<article class="history-item ${run.id === state.selectedId ? "active" : ""}" data-run-id="${esc(run.id)}">
-      <button class="compare-check ${checked ? "checked" : ""}" type="button" data-check-id="${esc(run.id)}" aria-label="加入对比">${checked ? "✓" : ""}</button>
+    const selector = state.bulkMode
+      ? `<button class="compare-check bulk-check ${deleteChecked ? "checked" : ""}" type="button" data-delete-id="${esc(run.id)}" aria-label="选择删除 ${esc(run.name)}" ${deleteLocked ? "disabled" : ""}>${deleteChecked ? "✓" : ""}</button>`
+      : `<button class="compare-check ${checked ? "checked" : ""}" type="button" data-check-id="${esc(run.id)}" aria-label="加入对比">${checked ? "✓" : ""}</button>`;
+    return `<article class="history-item ${run.id === state.selectedId && !state.bulkMode ? "active" : ""} ${deleteChecked ? "bulk-selected" : ""} ${state.bulkMode && deleteLocked ? "bulk-locked" : ""}" data-run-id="${esc(run.id)}">
+      ${selector}
       <div class="history-copy"><strong>${esc(run.name)}</strong><span>${esc(run.framework)} · ${esc(run.model)} · ${new Date(run.created_at * 1000).toLocaleString("zh-CN", {month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"})}</span>
         <div class="history-metrics"><span>${statusText}</span><span><b>${fmt(summary.output_throughput_tps)}</b> tok/s</span><span>${fmt(summary.latency_ms.p95,0)} ms P95</span></div>
       </div>
@@ -119,11 +127,35 @@ function renderHistory() {
   }).join("");
 
   $$("[data-run-id]").forEach(node => node.addEventListener("click", event => {
-    if (event.target.closest("[data-check-id]")) return;
+    if (event.target.closest("[data-check-id], [data-delete-id]")) return;
+    if (state.bulkMode) return toggleDeleteSelection(node.dataset.runId);
     selectRun(node.dataset.runId);
   }));
   $$("[data-check-id]").forEach(button => button.addEventListener("click", () => toggleCompare(button.dataset.checkId)));
+  $$("[data-delete-id]").forEach(button => button.addEventListener("click", () => toggleDeleteSelection(button.dataset.deleteId)));
   syncCompareButton();
+  syncBulkControls();
+}
+
+function toggleDeleteSelection(id) {
+  const item = state.runs.find(candidate => candidate.run.id === id);
+  if (!item || ["queued","running"].includes(item.run.status)) return toast("运行中或排队中的实验不能直接删除");
+  const at = state.deleteIds.indexOf(id);
+  if (at >= 0) state.deleteIds.splice(at, 1);
+  else state.deleteIds.push(id);
+  renderHistory();
+}
+
+function syncBulkControls() {
+  const bar = $("#bulkDeleteBar"), modeButton = $("#bulkModeBtn"), deleteButton = $("#bulkDeleteBtn"), selectAllButton = $("#bulkSelectAllBtn");
+  bar.classList.toggle("hidden", !state.bulkMode);
+  modeButton.classList.toggle("active", state.bulkMode);
+  modeButton.textContent = state.bulkMode ? "完成" : "多选";
+  $("#bulkSelectedCount").textContent = state.deleteIds.length;
+  deleteButton.disabled = state.deleteIds.length === 0;
+  const deletable = state.runs.filter(item => !["queued","running"].includes(item.run.status)).map(item => item.run.id);
+  selectAllButton.disabled = deletable.length === 0;
+  selectAllButton.textContent = deletable.length && deletable.every(id => state.deleteIds.includes(id)) ? "取消全选" : "全选";
 }
 
 function toggleCompare(id) {
@@ -480,6 +512,37 @@ $("#discoverBtn").addEventListener("click",async()=>{
 $$('.view-tab').forEach(tab=>tab.addEventListener("click",()=>setView(tab.dataset.view)));
 $("#compareBtn").addEventListener("click",runCompare);
 $("#refreshBtn").addEventListener("click",()=>loadRuns(true));
+$("#bulkModeBtn").addEventListener("click",()=>{
+  state.bulkMode = !state.bulkMode;
+  state.deleteIds = [];
+  renderHistory();
+});
+$("#bulkSelectAllBtn").addEventListener("click",()=>{
+  const deletable = state.runs.filter(item => !["queued","running"].includes(item.run.status)).map(item => item.run.id);
+  state.deleteIds = deletable.length && deletable.every(id => state.deleteIds.includes(id)) ? [] : deletable;
+  renderHistory();
+});
+$("#bulkDeleteBtn").addEventListener("click",async()=>{
+  const ids = [...state.deleteIds];
+  if (!ids.length || !confirm(`确定删除选中的 ${ids.length} 个实验及其全部本地样本？此操作不可撤销。`)) return;
+  const button = $("#bulkDeleteBtn");
+  button.disabled = true;
+  button.textContent = "删除中…";
+  let deleted = 0;
+  const failures = [];
+  for (const id of ids) {
+    try { await api(`/api/runs/${encodeURIComponent(id)}`, {method:"DELETE"}); deleted += 1; }
+    catch (error) { failures.push(error.message); }
+  }
+  state.compareIds = state.compareIds.filter(id => !ids.includes(id));
+  const keepSelection = !ids.includes(state.selectedId);
+  if (!keepSelection) state.selectedId = null;
+  state.bulkMode = false;
+  state.deleteIds = [];
+  button.textContent = "删除";
+  await loadRuns(keepSelection);
+  toast(failures.length ? `已删除 ${deleted} 个，${failures.length} 个失败` : `已删除 ${deleted} 个实验`);
+});
 $("#cancelBtn").addEventListener("click",async()=>{ if(!state.selectedId)return; try{await api(`/api/runs/${state.selectedId}/cancel`,{method:"POST"});await loadRuns(true);toast("本轮已停止，连接已中断");}catch(error){toast(error.message);} });
 $("#cancelSuiteBtn").addEventListener("click",async()=>{
   const suiteId=state.selected?.run.config.suite_id;

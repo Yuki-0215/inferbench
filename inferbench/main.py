@@ -49,7 +49,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(
     title="InferBench Local",
-    version="0.1.3",
+    version="0.1.5",
     description="Local-first benchmark console for OpenAI-compatible inference servers.",
     lifespan=lifespan,
 )
@@ -244,7 +244,7 @@ MOCK_WORDS = (
 async def mock_chat_completions(request: Request) -> StreamingResponse:
     body = await request.json()
     model = body.get("model", "mock-model")
-    max_tokens = min(max(int(body.get("max_tokens", 32)), 1), 128)
+    max_tokens = min(max(int(body.get("max_tokens", 128)), 1), 128)
     messages = body.get("messages") or []
     prompt = " ".join(str(message.get("content", "")) for message in messages)
     prompt_tokens = max(1, (len(prompt) + 3) // 4)
