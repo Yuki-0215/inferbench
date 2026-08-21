@@ -13,6 +13,8 @@ flowchart LR
     Adapter --> Cloud["云端 / 局域网 vLLM、SGLang"]
     Engine --> DB[("本地 SQLite")]
     DB --> Analysis["聚合 / 对比 / 评分"]
+    Analysis --> Report["版本化性能报告"]
+    Report --> DB
     Analysis --> API
     API --> UI
 ```
@@ -41,6 +43,7 @@ flowchart LR
 | Runner | 固定并发 worker、请求编排、warmup、取消 | asyncio |
 | Protocol Adapter | 构造请求、解析 SSE、提取 usage/error | httpx |
 | Metrics | percentile、吞吐、TTFT、ITL、成功率和评分 | Python |
+| Reporting | 按 suite 聚合、稳定性、饱和点、推荐并发和版本化快照 | Python |
 | Repository | 实验与请求样本事务化保存 | SQLite (WAL) |
 | Mock target | 模拟 OpenAI SSE 接口，用于无 GPU 自测 | FastAPI route |
 
@@ -53,6 +56,7 @@ flowchart LR
 5. 每完成一个请求即写入本地 SQLite，UI 轮询任务状态得到实时进度。
 6. 任务结束后计算汇总指标；详情页从原始样本重新组织分布图和异常信息。
 7. Compare API 先按 suite + concurrency 对重复轮次求算术平均值并计算 CV，再归一化输出相对基线变化与综合评分。
+8. suite 的预期 run 全部进入终态后，Reporting 从 SQLite 重读事实，按确定性规则生成报告快照；报告失败不改变 benchmark 状态。
 
 ## 4. 指标口径
 
@@ -88,6 +92,7 @@ score = 35% output_throughput
 ```mermaid
 erDiagram
     RUNS ||--o{ SAMPLES : contains
+    RUNS }o--|| REPORTS : summarized_by
     RUNS {
       text id PK
       text name
@@ -114,9 +119,29 @@ erDiagram
       text token_source
       text error
     }
+    REPORTS {
+      text id PK
+      text suite_id UK
+      text title
+      text analysis_version
+      text run_ids_json
+      text criteria_json
+      text environment_json
+      text snapshot_json
+      real updated_at
+    }
 ```
 
 SQLite 启用 WAL 和外键。汇总值默认查询时由样本计算，保证指标公式升级后历史数据仍可重算。
+
+报告保存的是带 `schema_version` 与 `analysis_version` 的聚合快照，同时引用全部 run IDs。这样历史报告不会因算法升级无声漂移；用户主动“重新分析”时才以原始样本覆盖同一 suite 的报告。报告不保存 API Key、完整 prompt 或响应正文。
+
+### 默认报告判定规则
+
+- 成功率低于 99%，或相邻并发档吞吐增益低于 10% 且 P95 延迟增长超过 30%，视为饱和信号。
+- 未配置 SLO 时，在饱和点之前的成功率合格档位中选择输出吞吐最高者。
+- 配置 SLO 后，只从满足最低成功率、最低吞吐、TTFT P95 和 Latency P95 条件的档位中推荐。
+- 每档少于 3 轮、吞吐 CV 过高或 token 大量来自估算时降低证据等级并明确提示。
 
 ## 6. API 草案
 
@@ -126,6 +151,9 @@ SQLite 启用 WAL 和外键。汇总值默认查询时由样本计算，保证�
 - `POST /api/runs/{id}/cancel`：取消运行中任务
 - `DELETE /api/runs/{id}`：删除已结束实验
 - `GET /api/compare?aggregate=true&ids=a,b,...`：按重复轮次求均值后对比与评分
+- `GET|POST /api/reports`：列出报告或为 suite 手动生成报告
+- `GET|PUT|DELETE /api/reports/{id}`：查看、按 SLO/环境重算或删除报告
+- `GET /api/reports/{id}/export`：导出版本化 JSON 快照
 - `GET /api/health`：本地服务健康检查
 - `POST /mock/v1/chat/completions`：本地 SSE 模拟目标
 
@@ -143,4 +171,4 @@ SQLite 启用 WAL 和外键。汇总值默认查询时由样本计算，保证�
 2. 支持 JSONL/HuggingFace 数据集、固定速率与 Poisson 到达模型。
 3. 在被测服务旁部署轻量 telemetry sidecar，采集 GPU 利用率、显存和功耗。
 4. 将 Runner 抽象为远程 agent，控制面仍保留本地，支持多地域压测。
-5. 导出 JSON/CSV 与可复现实验 manifest，接入 CI 回归阈值。
+5. 增加服务端 PDF、可复现实验 manifest 与可选 AI 文字润色，接入 CI 回归阈值。

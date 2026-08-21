@@ -35,6 +35,7 @@ class RunCreate(BaseModel):
     suite_name: str | None = Field(default=None, min_length=1, max_length=80)
     repetition: int = Field(default=1, ge=1, le=20)
     repetitions: int = Field(default=1, ge=1, le=20)
+    suite_total_runs: int | None = Field(default=None, ge=1, le=160)
 
     @field_validator("endpoint")
     @classmethod
@@ -85,7 +86,28 @@ class RunCreate(BaseModel):
             "suite_name": self.suite_name,
             "repetition": self.repetition,
             "repetitions": self.repetitions,
+            "suite_total_runs": self.suite_total_runs,
         }
+
+
+class ReportCriteria(BaseModel):
+    min_success_rate: float | None = Field(default=None, ge=0, le=100)
+    min_output_throughput_tps: float | None = Field(default=None, ge=0)
+    max_ttft_p95_ms: float | None = Field(default=None, ge=0)
+    max_latency_p95_ms: float | None = Field(default=None, ge=0)
+
+
+class ReportCreate(BaseModel):
+    suite_id: str = Field(max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
+    title: str | None = Field(default=None, min_length=1, max_length=120)
+    criteria: ReportCriteria = Field(default_factory=ReportCriteria)
+    environment: dict[str, str] = Field(default_factory=dict)
+
+
+class ReportUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=120)
+    criteria: ReportCriteria | None = None
+    environment: dict[str, str] | None = None
 
 
 class SampleRecord(BaseModel):

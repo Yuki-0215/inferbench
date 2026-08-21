@@ -1,7 +1,7 @@
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 
-const state = { runs: [], selectedId: null, selected: null, compareIds: [], bulkMode: false, deleteIds: [], view: "observe", poller: null, loading: false, tokenPoint: null };
+const state = { runs: [], selectedId: null, selected: null, compareIds: [], bulkMode: false, deleteIds: [], view: "observe", poller: null, loading: false, tokenPoint: null, reports: [], selectedReportId: null };
 const statusLabel = { queued: "排队", running: "运行中", completed: "已完成", failed: "失败", cancelled: "已取消" };
 
 function esc(value) {
@@ -67,6 +67,7 @@ async function loadRuns(keepSelection = true) {
   state.loading = true;
   try {
     state.runs = await api("/api/runs");
+    await loadReports(true);
     $("#runCount").textContent = state.runs.length;
     const running = state.runs.find(item => item.run.status === "running");
     const selected = keepSelection && state.selectedId
@@ -85,6 +86,86 @@ async function loadRuns(keepSelection = true) {
     state.loading = false;
     managePolling();
   }
+}
+
+async function loadReports(keepSelection = true) {
+  state.reports = await api("/api/reports");
+  $("#reportCount").textContent = state.reports.length;
+  const selected = keepSelection && state.selectedReportId
+    ? state.reports.find(report => report.id === state.selectedReportId)
+    : null;
+  state.selectedReportId = (selected || state.reports[0])?.id || null;
+  renderReportPicker();
+  renderReport();
+}
+
+function renderReportPicker() {
+  const picker = $("#reportSelect");
+  picker.disabled = !state.reports.length;
+  picker.innerHTML = state.reports.length
+    ? state.reports.map(report => `<option value="${esc(report.id)}" ${report.id === state.selectedReportId ? "selected" : ""}>${esc(report.title)}</option>`).join("")
+    : `<option value="">暂无报告</option>`;
+  ["#reportSettingsBtn", "#regenerateReportBtn", "#copyReportBtn", "#exportReportJsonBtn", "#exportReportHtmlBtn", "#printReportBtn"].forEach(selector => {
+    $(selector).disabled = !state.selectedReportId;
+  });
+}
+
+function reportLineChart(levels, series, unit) {
+  const width=720, height=250, pad={l:58,r:22,t:24,b:42};
+  const values=series.flatMap(item=>levels.map(level=>Number(item.value(level))).filter(Number.isFinite));
+  const max=Math.max(...values,1), min=Math.min(...values,0), span=Math.max(max-min,1);
+  const x=index=>pad.l+(levels.length===1?0:(width-pad.l-pad.r)*index/(levels.length-1));
+  const y=value=>pad.t+(height-pad.t-pad.b)*(1-(value-min)/span);
+  const grid=[0,.5,1].map(ratio=>{const value=max-(max-min)*ratio, yy=pad.t+(height-pad.t-pad.b)*ratio;return `<line x1="${pad.l}" y1="${yy}" x2="${width-pad.r}" y2="${yy}"/><text x="${pad.l-9}" y="${yy+4}" text-anchor="end">${fmt(value,0)}</text>`;}).join("");
+  const lines=series.map(item=>{
+    const points=levels.map((level,index)=>`${x(index)},${y(Number(item.value(level))||0)}`).join(" ");
+    const dots=levels.map((level,index)=>`<circle cx="${x(index)}" cy="${y(Number(item.value(level))||0)}" r="4"><title>C${level.concurrency} · ${item.label} ${fmt(item.value(level),1)} ${unit}</title></circle>`).join("");
+    return `<g class="report-series" style="--series:${item.color}"><polyline points="${points}"/>${dots}</g>`;
+  }).join("");
+  const labels=levels.map((level,index)=>`<text x="${x(index)}" y="${height-12}" text-anchor="middle">C${level.concurrency}</text>`).join("");
+  const legend=series.map(item=>`<span><i style="background:${item.color}"></i>${esc(item.label)}</span>`).join("");
+  return `<div class="report-chart-legend">${legend}</div><svg class="report-line-chart" viewBox="0 0 ${width} ${height}" role="img">${grid}${lines}${labels}</svg>`;
+}
+
+function stabilityChart(levels) {
+  const max=Math.max(...levels.map(level=>Number(level.stability.throughput_cv_pct)||0),10);
+  return `<div class="stability-bars">${levels.map(level=>{
+    const value=Number(level.stability.throughput_cv_pct)||0;
+    return `<div><span>C${level.concurrency}</span><i><b style="width:${Math.min(100,value/max*100)}%"></b></i><strong>${fmt(level.stability.throughput_cv_pct,2)}%</strong></div>`;
+  }).join("")}</div>`;
+}
+
+function renderReport() {
+  const report=state.reports.find(item=>item.id===state.selectedReportId);
+  $("#reportEmpty").classList.toggle("hidden", Boolean(report));
+  const paper=$("#reportCapture");
+  paper.classList.toggle("hidden", !report);
+  if(!report) return;
+  const snapshot=report.snapshot, levels=snapshot.levels || [], headline=snapshot.headline, recommended=headline.recommended || {};
+  const quality=snapshot.quality || {}, suite=snapshot.suite || {}, criteria=report.criteria || {}, environment=report.environment || {};
+  const configuredCriteria=Object.entries(criteria).filter(([,value])=>value!=null);
+  const criteriaLabels={min_success_rate:"成功率 ≥",min_output_throughput_tps:"吞吐 ≥",max_ttft_p95_ms:"TTFT P95 ≤",max_latency_p95_ms:"Latency P95 ≤"};
+  paper.innerHTML=`
+    <header class="report-cover">
+      <div><span class="report-kicker">INFERBENCH / LOCAL EVIDENCE / ${esc(report.analysis_version)}</span><h1>${esc(report.title)}</h1><p>${esc(suite.framework)} · ${esc(suite.model)} · ${esc(suite.endpoint)}</p></div>
+      <div class="quality-seal"><strong>${esc(quality.grade || "—")}</strong><span>证据等级</span><small>${esc(quality.label || "")}</small></div>
+    </header>
+    <div class="report-meta"><span>生成 ${new Date(report.updated_at*1000).toLocaleString("zh-CN",{hour12:false})}</span><span>${suite.run_count} runs · ${suite.repetitions} 轮/档</span><span>${suite.requests_per_run} 请求/轮 · max ${suite.max_tokens} tokens</span><span>分析版本 ${esc(report.analysis_version)}</span></div>
+    <section class="report-verdict">
+      <div><span>RECOMMENDED OPERATING POINT</span><h2>C${headline.recommended_concurrency}</h2><p>推荐并发</p></div>
+      <dl><div><dt>平均输出吞吐</dt><dd>${fmt(recommended.output_throughput_tps)} <small>tok/s</small></dd></div><div><dt>Latency P95</dt><dd>${fmt(recommended.latency_ms?.p95,0)} <small>ms</small></dd></div><div><dt>TTFT P95</dt><dd>${fmt(recommended.ttft_ms?.p95,0)} <small>ms</small></dd></div><div><dt>成功率</dt><dd>${fmt(recommended.success_rate,2)}<small>%</small></dd></div></dl>
+      <div class="saturation-note ${snapshot.saturation.detected?"warning":""}"><span>${snapshot.saturation.detected?"SATURATION FOUND":"HEADROOM"}</span><strong>${snapshot.saturation.detected?`C${snapshot.saturation.concurrency} 出现拐点`:"测试范围内仍有扩展空间"}</strong><p>${esc(snapshot.saturation.reason || "建议增加更高并发档继续验证服务上限。")}</p></div>
+    </section>
+    <section class="report-conclusions"><header><span>EXECUTIVE FINDINGS</span><h2>结论摘要</h2></header><div>${snapshot.conclusions.map((item,index)=>`<article class="${esc(item.tone)}"><b>${String(index+1).padStart(2,"0")}</b><div><h3>${esc(item.title)}</h3><p>${esc(item.body)}</p></div></article>`).join("")}</div></section>
+    ${quality.warnings?.length?`<section class="report-quality-warning"><strong>数据质量提示</strong><ul>${quality.warnings.map(item=>`<li>${esc(item)}</li>`).join("")}</ul></section>`:""}
+    <section class="report-chart-grid">
+      <article><header><span>SCALING CURVE</span><h3>Token 吞吐随并发变化</h3></header>${reportLineChart(levels,[{label:"Output tok/s",color:"#315cf5",value:level=>level.summary.output_throughput_tps}],"tok/s")}</article>
+      <article><header><span>TAIL LATENCY</span><h3>响应延迟与首 Token</h3></header>${reportLineChart(levels,[{label:"Latency P95",color:"#e88b3d",value:level=>level.summary.latency_ms?.p95},{label:"TTFT P95",color:"#7657e8",value:level=>level.summary.ttft_ms?.p95}],"ms")}</article>
+      <article><header><span>REPEATABILITY</span><h3>三轮吞吐稳定性 · CV</h3></header>${stabilityChart(levels)}<p class="report-method">CV 越低越稳定；≤5% 通常表示测试重复性良好。</p></article>
+      <article><header><span>REQUEST OUTCOME</span><h3>成功与错误分布</h3></header><div class="outcome-visual"><div class="outcome-ring" style="--success:${recommended.success_rate||0}"><strong>${fmt(recommended.success_rate,2)}%</strong><span>推荐档成功率</span></div><div><b>${quality.sample_count||0}</b><span>总样本</span><b>${snapshot.errors.reduce((sum,item)=>sum+item.count,0)}</b><span>失败请求</span></div></div></article>
+    </section>
+    <section class="report-table-section"><header><span>CONCURRENCY MATRIX</span><h2>并发档评估明细</h2></header><div class="comparison-table"><table><thead><tr><th>并发</th><th>轮次</th><th>Output tok/s</th><th>吞吐增益</th><th>吞吐 CV</th><th>TTFT P95</th><th>Latency P95</th><th>成功率</th><th>判定</th></tr></thead><tbody>${levels.map(level=>`<tr class="${level.concurrency===headline.recommended_concurrency?"recommended-row":""}"><td><strong>C${level.concurrency}</strong></td><td>${level.repetitions}</td><td>${fmt(level.summary.output_throughput_tps)}</td><td>${delta(level.changes.throughput_pct)}</td><td>${fmt(level.stability.throughput_cv_pct,2)}%</td><td>${fmt(level.summary.ttft_ms?.p95,0)} ms</td><td>${fmt(level.summary.latency_ms?.p95,0)} ms</td><td>${fmt(level.summary.success_rate,2)}%</td><td>${level.concurrency===headline.recommended_concurrency?"推荐":level.meets_criteria?"通过":"未达标"}</td></tr>`).join("")}</tbody></table></div></section>
+    <footer class="report-foot"><div><span>评估标准</span><p>${configuredCriteria.length?configuredCriteria.map(([key,value])=>`${criteriaLabels[key]} ${fmt(value)}${key.includes("rate")?"%":key.includes("throughput")?" tok/s":" ms"}`).join(" · "):"未配置硬性 SLO，采用内置平衡规则"}</p></div><div><span>运行环境</span><p>${Object.values(environment).filter(Boolean).length?Object.entries(environment).filter(([,value])=>value).map(([key,value])=>`${esc(key)}: ${esc(value)}`).join(" · "):"未补充硬件与框架版本"}</p></div><small>本报告由本地确定性规则生成 · 快照不会随原始数据自动漂移 · ${esc(report.id)}</small></footer>`;
 }
 
 function progressOf(item) {
@@ -228,6 +309,11 @@ function renderDetail(item) {
   }
   $("#cancelBtn").classList.toggle("hidden", !["queued","running"].includes(run.status));
   $("#cancelSuiteBtn").classList.toggle("hidden", !run.config.suite_id || !["queued","running"].includes(run.status));
+  const suiteReport=run.config.suite_id ? state.reports.find(report=>report.suite_id===run.config.suite_id) : null;
+  const suiteRuns=run.config.suite_id ? state.runs.filter(candidate=>candidate.run.config.suite_id===run.config.suite_id) : [];
+  const suiteTerminal=suiteRuns.length && suiteRuns.every(candidate=>["completed","failed","cancelled"].includes(candidate.run.status));
+  $("#viewReportBtn").classList.toggle("hidden", !run.config.suite_id || (!suiteReport && !suiteTerminal));
+  $("#viewReportBtn").textContent=suiteReport?"查看报告":"生成报告";
   $("#deleteBtn").classList.toggle("hidden", ["queued","running"].includes(run.status));
   $("#copyScreenshotBtn").disabled = false;
   $("#exportCsvBtn").disabled = !samples.length;
@@ -417,6 +503,7 @@ function setView(view) {
   $$(".view-tab").forEach(tab => tab.classList.toggle("active", tab.dataset.view === view));
   $("#observeView").classList.toggle("active", view === "observe");
   $("#compareView").classList.toggle("active", view === "compare");
+  $("#reportView").classList.toggle("active", view === "report");
 }
 
 async function runCompare() {
@@ -455,7 +542,7 @@ $("#runForm").addEventListener("submit", async event => {
       api_key:data.get("api_key") || null, api_key_env:data.get("api_key_env") || null,
       requests:Number(data.get("requests")), max_tokens:Number(data.get("max_tokens")),
       warmup_requests:Number(data.get("warmup_requests")), timeout_s:Number(data.get("timeout_s")), prompts:String(data.get("prompts")).split("\n").map(x=>x.trim()).filter(Boolean), extra_body:extraBody,
-      suite_id:suiteId, suite_name:suiteName, repetitions
+      suite_id:suiteId, suite_name:suiteName, repetitions, suite_total_runs:concurrencyLevels.length*repetitions
     };
     note.textContent = `正在创建 ${concurrencyLevels.length} 档 × ${repetitions} 轮实验…`;
     const results=[], failures=[];
@@ -583,9 +670,8 @@ function inlineSnapshotStyles(source, clone) {
   });
 }
 
-async function createTestSnapshot() {
-  const source = $("#detailCapture");
-  if (!source || !state.selected) throw new Error("请先选择一个实验");
+async function createElementSnapshot(source, footerText) {
+  if (!source) throw new Error("没有可截图的内容");
   if (document.fonts?.ready) await document.fonts.ready;
 
   const bounds = source.getBoundingClientRect();
@@ -604,7 +690,7 @@ async function createTestSnapshot() {
   clone.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
 
   const footer = document.createElement("div");
-  footer.textContent = `INFERBENCH · ${state.selected.run.model} · ${new Date().toLocaleString("zh-CN", { hour12: false })}`;
+  footer.textContent = footerText;
   footer.style.cssText = "display:flex;align-items:center;justify-content:flex-end;height:32px;margin-top:10px;color:#9da5b4;font:700 8px SFMono-Regular,Menlo,monospace;letter-spacing:.08em;border-top:1px solid #e3e7ef";
   clone.appendChild(footer);
 
@@ -627,6 +713,11 @@ async function createTestSnapshot() {
   context.fillRect(0, 0, width, height);
   context.drawImage(image, 0, 0, width, height);
   return await new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error("PNG 生成失败")), "image/png"));
+}
+
+async function createTestSnapshot() {
+  if (!state.selected) throw new Error("请先选择一个实验");
+  return createElementSnapshot($("#detailCapture"), `INFERBENCH · ${state.selected.run.model} · ${new Date().toLocaleString("zh-CN", { hour12: false })}`);
 }
 
 function downloadSnapshot(blob) {
@@ -667,9 +758,90 @@ async function copyTestSnapshot() {
   }
 }
 
+function selectedReport() { return state.reports.find(report=>report.id===state.selectedReportId); }
+
+async function generateSelectedSuiteReport() {
+  const suiteId=state.selected?.run.config.suite_id;
+  if(!suiteId) return;
+  try {
+    const report=await api("/api/reports",{method:"POST",body:JSON.stringify({suite_id:suiteId})});
+    await loadReports(false);
+    state.selectedReportId=report.id;
+    renderReportPicker(); renderReport(); setView("report");
+    toast("性能报告已生成");
+  } catch(error) { toast(`报告生成失败：${error.message}`); }
+}
+
+function openReportSettings() {
+  const report=selectedReport(); if(!report)return;
+  const form=$("#reportSettingsForm"), criteria=report.criteria||{}, environment=report.environment||{};
+  Object.entries(criteria).forEach(([key,value])=>{if(form.elements[key])form.elements[key].value=value??"";});
+  ["hardware","framework_version","notes"].forEach(key=>{form.elements[key].value=environment[key]||"";});
+  $("#reportSettingsDialog").showModal();
+}
+
+async function saveReportSettings() {
+  const report=selectedReport(); if(!report)return;
+  const form=$("#reportSettingsForm"), number=name=>form.elements[name].value===""?null:Number(form.elements[name].value);
+  const payload={criteria:{min_success_rate:number("min_success_rate"),min_output_throughput_tps:number("min_output_throughput_tps"),max_ttft_p95_ms:number("max_ttft_p95_ms"),max_latency_p95_ms:number("max_latency_p95_ms")},environment:{hardware:form.elements.hardware.value.trim(),framework_version:form.elements.framework_version.value.trim(),notes:form.elements.notes.value.trim()}};
+  const button=$("#saveReportSettingsBtn"); button.disabled=true;
+  try { await api(`/api/reports/${encodeURIComponent(report.id)}`,{method:"PUT",body:JSON.stringify(payload)}); $("#reportSettingsDialog").close(); await loadReports(true); toast("评估标准已保存，报告已重新分析"); }
+  catch(error){toast(`保存失败：${error.message}`);} finally{button.disabled=false;}
+}
+
+async function regenerateReport() {
+  const report=selectedReport(); if(!report)return;
+  try { await api(`/api/reports/${encodeURIComponent(report.id)}`,{method:"PUT",body:JSON.stringify({})}); await loadReports(true); toast("已基于当前原始数据重新生成快照"); }
+  catch(error){toast(`重新分析失败：${error.message}`);}
+}
+
+async function downloadReportJson() {
+  const report=selectedReport(); if(!report)return;
+  const response=await fetch(`/api/reports/${encodeURIComponent(report.id)}/export`);
+  if(!response.ok)return toast("报告 JSON 导出失败");
+  downloadBlob(await response.blob(),`inferbench-${report.id}.json`);
+}
+
+function downloadBlob(blob, filename) {
+  const url=URL.createObjectURL(blob), link=document.createElement("a"); link.href=url; link.download=filename; document.body.appendChild(link); link.click(); link.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+
+async function exportReportHtml() {
+  const report=selectedReport(); if(!report)return;
+  try {
+    const css=await fetch("/static/styles.css").then(response=>response.text());
+    const html=`<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${esc(report.title)}</title><style>${css}\nbody{overflow:auto}.report-paper{display:block!important;max-width:1440px;margin:24px auto}.report-paper.hidden{display:block!important}</style></head><body><article class="report-paper">${$("#reportCapture").innerHTML}</article></body></html>`;
+    downloadBlob(new Blob([html],{type:"text/html;charset=utf-8"}),`inferbench-${report.id}.html`); toast("已导出独立 HTML 报告");
+  } catch(error){toast(`HTML 导出失败：${error.message}`);}
+}
+
+async function copyReportSnapshot() {
+  const report=selectedReport(), button=$("#copyReportBtn"); if(!report)return;
+  button.disabled=true; button.querySelector("span").textContent="正在生成…";
+  try {
+    const blob=await createElementSnapshot($("#reportCapture"),`INFERBENCH REPORT · ${report.id} · ${new Date().toLocaleString("zh-CN",{hour12:false})}`);
+    if(window.isSecureContext&&navigator.clipboard?.write&&window.ClipboardItem){await navigator.clipboard.write([new ClipboardItem({"image/png":blob})]);toast("报告长图已复制到剪贴板");}
+    else{downloadBlob(blob,`inferbench-${report.id}.png`);toast("当前连接不支持剪贴板，已下载报告长图");}
+  } catch(error){toast(`长图生成失败：${error.message}`);} finally{button.disabled=false;button.querySelector("span").textContent="复制长图";}
+}
+
 $("#exportCsvBtn").addEventListener("click", () => downloadRun("csv"));
 $("#exportJsonBtn").addEventListener("click", () => downloadRun("json"));
 $("#copyScreenshotBtn").addEventListener("click", copyTestSnapshot);
+$("#viewReportBtn").addEventListener("click",async()=>{
+  const report=state.reports.find(item=>item.suite_id===state.selected?.run.config.suite_id);
+  if(report){state.selectedReportId=report.id;renderReportPicker();renderReport();setView("report");}
+  else await generateSelectedSuiteReport();
+});
+$("#reportSelect").addEventListener("change",event=>{state.selectedReportId=event.target.value;renderReport();});
+$("#reportSettingsBtn").addEventListener("click",openReportSettings);
+$("#saveReportSettingsBtn").addEventListener("click",saveReportSettings);
+$("#regenerateReportBtn").addEventListener("click",regenerateReport);
+$("#exportReportJsonBtn").addEventListener("click",downloadReportJson);
+$("#exportReportHtmlBtn").addEventListener("click",exportReportHtml);
+$("#copyReportBtn").addEventListener("click",copyReportSnapshot);
+$("#printReportBtn").addEventListener("click",()=>{document.body.classList.add("print-report");window.print();});
+window.addEventListener("afterprint",()=>document.body.classList.remove("print-report"));
 
 document.addEventListener("visibilitychange",()=>{
   if(document.visibilityState === "hidden" && state.poller) {

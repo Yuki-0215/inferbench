@@ -58,6 +58,21 @@ class Repository:
                     UNIQUE(run_id, request_index)
                 );
                 CREATE INDEX IF NOT EXISTS idx_samples_run_id ON samples(run_id);
+
+                CREATE TABLE IF NOT EXISTS reports (
+                    id TEXT PRIMARY KEY,
+                    suite_id TEXT NOT NULL UNIQUE,
+                    title TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'draft',
+                    analysis_version TEXT NOT NULL,
+                    run_ids_json TEXT NOT NULL,
+                    criteria_json TEXT NOT NULL,
+                    environment_json TEXT NOT NULL,
+                    snapshot_json TEXT NOT NULL,
+                    created_at REAL NOT NULL,
+                    updated_at REAL NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_reports_updated_at ON reports(updated_at DESC);
                 """
             )
 
@@ -164,6 +179,94 @@ class Repository:
                 "SELECT * FROM samples WHERE run_id=? ORDER BY request_index", (run_id,)
             ).fetchall()
         return [dict(row) | {"ok": bool(row["ok"])} for row in rows]
+
+    def list_suite_runs(self, suite_id: str) -> list[dict[str, Any]]:
+        with self._lock, self._connect() as connection:
+            rows = connection.execute(
+                """SELECT * FROM runs
+                WHERE json_extract(config_json, '$.suite_id')=?
+                ORDER BY created_at""",
+                (suite_id,),
+            ).fetchall()
+        return [self._run_dict(row) for row in rows]
+
+    @staticmethod
+    def _report_dict(row: sqlite3.Row) -> dict[str, Any]:
+        item = dict(row)
+        for target, source in (
+            ("run_ids", "run_ids_json"),
+            ("criteria", "criteria_json"),
+            ("environment", "environment_json"),
+            ("snapshot", "snapshot_json"),
+        ):
+            item[target] = json.loads(item.pop(source))
+        return item
+
+    def upsert_report(
+        self,
+        report_id: str,
+        suite_id: str,
+        title: str,
+        analysis_version: str,
+        run_ids: list[str],
+        criteria: dict[str, Any],
+        environment: dict[str, str],
+        snapshot: dict[str, Any],
+    ) -> dict[str, Any]:
+        now = time.time()
+        values = (
+            report_id,
+            suite_id,
+            title,
+            analysis_version,
+            json.dumps(run_ids),
+            json.dumps(criteria),
+            json.dumps(environment, ensure_ascii=False),
+            json.dumps(snapshot, ensure_ascii=False),
+            now,
+            now,
+        )
+        with self._lock, self._connect() as connection:
+            connection.execute(
+                """INSERT INTO reports
+                (id, suite_id, title, analysis_version, run_ids_json, criteria_json,
+                 environment_json, snapshot_json, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(suite_id) DO UPDATE SET
+                    title=excluded.title,
+                    analysis_version=excluded.analysis_version,
+                    run_ids_json=excluded.run_ids_json,
+                    criteria_json=excluded.criteria_json,
+                    environment_json=excluded.environment_json,
+                    snapshot_json=excluded.snapshot_json,
+                    updated_at=excluded.updated_at""",
+                values,
+            )
+        report = self.get_report_by_suite(suite_id)
+        assert report is not None
+        return report
+
+    def get_report(self, report_id: str) -> dict[str, Any] | None:
+        with self._lock, self._connect() as connection:
+            row = connection.execute("SELECT * FROM reports WHERE id=?", (report_id,)).fetchone()
+        return self._report_dict(row) if row else None
+
+    def get_report_by_suite(self, suite_id: str) -> dict[str, Any] | None:
+        with self._lock, self._connect() as connection:
+            row = connection.execute("SELECT * FROM reports WHERE suite_id=?", (suite_id,)).fetchone()
+        return self._report_dict(row) if row else None
+
+    def list_reports(self, limit: int = 100) -> list[dict[str, Any]]:
+        with self._lock, self._connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM reports ORDER BY updated_at DESC LIMIT ?", (limit,)
+            ).fetchall()
+        return [self._report_dict(row) for row in rows]
+
+    def delete_report(self, report_id: str) -> bool:
+        with self._lock, self._connect() as connection:
+            cursor = connection.execute("DELETE FROM reports WHERE id=?", (report_id,))
+        return cursor.rowcount > 0
 
     def delete_run(self, run_id: str) -> bool:
         with self._lock, self._connect() as connection:

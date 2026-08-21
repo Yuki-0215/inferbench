@@ -28,10 +28,11 @@ LAYERS = {
     "adapter": 1,
     "database": 1,
     "metrics": 1,
-    "runner": 2,
-    "main": 3,
-    "cli": 4,
-    "__main__": 5,
+    "reporting": 2,
+    "runner": 3,
+    "main": 4,
+    "cli": 5,
+    "__main__": 6,
 }
 
 
