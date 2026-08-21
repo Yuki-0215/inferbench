@@ -18,6 +18,12 @@ InferBench 通过 OpenAI-compatible API 对远端 vLLM 服务持续发起并发�
 
 ![vLLM 推理服务压测日志](docs/images/vllm-benchmark-runtime.png)
 
+### 自动性能评估报告
+
+并发矩阵全部完成后，InferBench 会根据本地保存的原始样本自动生成图文报告，汇总推荐并发、吞吐扩展、尾延迟、三轮稳定性、成功率和并发档明细。
+
+![InferBench 自动性能评估报告](docs/images/inferbench-performance-report.png)
+
 ## 能力
 
 - 对 `/v1/chat/completions` 发起真实 SSE 流式并发请求
