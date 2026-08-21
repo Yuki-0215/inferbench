@@ -11,6 +11,7 @@ import httpx
 from .adapter import issue_chat_request
 from .database import Repository
 from .models import RunCreate
+from .reporting import ReportManager
 
 
 @dataclass
@@ -21,8 +22,9 @@ class ActiveRun:
 
 
 class RunManager:
-    def __init__(self, repository: Repository):
+    def __init__(self, repository: Repository, report_manager: ReportManager | None = None):
         self.repository = repository
+        self.report_manager = report_manager or ReportManager(repository)
         self.active: dict[str, ActiveRun] = {}
         # Only one measured run may pressure a target at a time. This keeps
         # matrix levels and repetitions from contaminating each other's data.
@@ -54,6 +56,8 @@ class RunManager:
         # Persist the visible state before cancelling so the API/UI reflects the
         # stop immediately, even when the task was still waiting for the slot.
         self.repository.finish_run(run_id, "cancelled", "cancelled by user")
+        if active.suite_id:
+            self.report_manager.safe_maybe_generate(active.suite_id)
         if not active.task.done():
             active.task.cancel()
         return True
@@ -105,7 +109,7 @@ class RunManager:
                     )
 
                 if cancel_event.is_set():
-                    self.repository.finish_run(run_id, "cancelled")
+                    self._finish(run_id, config, "cancelled")
                     return
 
                 # The measured wall time intentionally starts after warmup so
@@ -137,11 +141,18 @@ class RunManager:
                 workers = [asyncio.create_task(worker()) for _ in range(config.concurrency)]
                 await asyncio.gather(*workers)
             if cancel_event.is_set():
-                self.repository.finish_run(run_id, "cancelled")
+                self._finish(run_id, config, "cancelled")
             else:
-                self.repository.finish_run(run_id, "completed")
+                self._finish(run_id, config, "completed")
         except asyncio.CancelledError:
-            self.repository.finish_run(run_id, "cancelled", "cancelled by user")
+            self._finish(run_id, config, "cancelled", "cancelled by user")
             raise
         except Exception as exc:
-            self.repository.finish_run(run_id, "failed", str(exc)[:2000])
+            self._finish(run_id, config, "failed", str(exc)[:2000])
+
+    def _finish(
+        self, run_id: str, config: RunCreate, status: str, error: str | None = None
+    ) -> None:
+        self.repository.finish_run(run_id, status, error)
+        if config.suite_id:
+            self.report_manager.safe_maybe_generate(config.suite_id, config.suite_total_runs)

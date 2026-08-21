@@ -13,11 +13,11 @@
 | Python 依赖方向 | 自动检查 | AST 结构规则 |
 | 版本一致性 | 自动检查 | 包、API 与本地发布脚本版本对齐 |
 | 镜像发布 | GitHub Actions | Tag 驱动、amd64/arm64、UCloud Registry |
-| UI 行为 | 部分自动化 | Playwright smoke 脚本，尚未全部纳入默认 CI |
+| UI 行为 | 部分自动化 | Playwright smoke 覆盖仪表盘、截图、批量删除与性能报告，尚未全部纳入默认 CI |
 
 ## 黄金不变量
 
-- Python 模块依赖只能沿 `models -> adapter/database/metrics -> runner -> main` 前进。
+- Python 模块依赖只能沿 `models -> adapter/database/metrics -> reporting -> runner -> main` 前进。
 - `pyproject.toml`、包版本、FastAPI 版本和发布脚本默认版本必须一致。
 - Docker 打包必须包含 `LICENSE`。
 - 发布工作流只接受版本 Tag，不推送 `latest`，并同时构建 amd64/arm64。

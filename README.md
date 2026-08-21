@@ -30,6 +30,8 @@ InferBench 通过 OpenAI-compatible API 对远端 vLLM 服务持续发起并发�
 - 支持立即停止本轮或整组矩阵；停止会取消排队任务并中断正在读取的流式连接
 - 支持批量选择和删除多个已结束实验，运行中或排队记录会自动保护
 - 选择 2–8 次实验，以首项为基线对比并生成透明综合评分
+- 矩阵完成后自动生成本地图文性能报告，给出饱和拐点、推荐并发和数据质量等级
+- 报告支持自定义 SLO 与运行环境，并可导出 JSON、独立 HTML、打印 PDF 或复制长图
 - 内置 mock OpenAI endpoint，无 GPU 也能跑通完整流程
 
 详细设计见 [ARCHITECTURE.md](ARCHITECTURE.md)，代码贡献与版本发布规则见 [CONTRIBUTING.md](CONTRIBUTING.md)，智能体可从 [AGENTS.md](AGENTS.md) 和 [docs/README.md](docs/README.md) 渐进读取仓库知识。
@@ -59,7 +61,7 @@ docker compose logs -f inferbench
 ### 构建并发布多架构镜像
 
 仓库发布脚本默认构建 `linux/amd64` 和 `linux/arm64`，并推送为
-`uhub.service.ucloud.cn/openbayes_common/inferbench:v0.1.5`。先登录 UHub：
+`uhub.service.ucloud.cn/openbayes_common/inferbench:v0.1.6`。先登录 UHub：
 
 ```bash
 docker login uhub.service.ucloud.cn
@@ -69,8 +71,8 @@ docker login uhub.service.ucloud.cn
 使用其他标签或镜像名：
 
 ```bash
-TAG=v0.1.5 ./scripts/build-multiarch.sh
-IMAGE=uhub.service.ucloud.cn/openbayes_common/inferbench TAG=v0.1.5 \
+TAG=v0.1.6 ./scripts/build-multiarch.sh
+IMAGE=uhub.service.ucloud.cn/openbayes_common/inferbench TAG=v0.1.6 \
   ./scripts/build-multiarch.sh
 ```
 
@@ -83,9 +85,9 @@ PUSH=0 ./scripts/build-multiarch.sh
 目标机器可直接使用发布镜像启动：
 
 ```bash
-INFERBENCH_IMAGE=uhub.service.ucloud.cn/openbayes_common/inferbench:v0.1.5 \
+INFERBENCH_IMAGE=uhub.service.ucloud.cn/openbayes_common/inferbench:v0.1.6 \
   docker compose pull
-INFERBENCH_IMAGE=uhub.service.ucloud.cn/openbayes_common/inferbench:v0.1.5 \
+INFERBENCH_IMAGE=uhub.service.ucloud.cn/openbayes_common/inferbench:v0.1.6 \
   docker compose up -d
 ```
 
@@ -188,6 +190,12 @@ vLLM 和 SGLang 的服务端只需开启其 OpenAI-compatible HTTP server。本�
 
 Compare 会先按并发档对重复轮次求均值，再进行评分，并展示吞吐 CV（标准差 / 均值）衡量稳定性。综合评分只适合在同一个 compare 组中排序。模型、prompt 数据集或生成参数不一致时，界面和 API 会给出可比性警告。
 
+## 自动性能报告
+
+一组并发矩阵的全部轮次结束后，工作台会自动生成一份版本化报告快照。报告使用本地确定性规则分析吞吐扩展、P95 延迟、TTFT、成功率和三轮 CV：当下一档吞吐增益低于 10%、同时 P95 延迟增长超过 30%，或成功率跌破 99% 时，会标记饱和拐点，并在拐点前选择满足条件且吞吐最高的并发档。没有硬性 SLO 时，推荐只代表默认平衡规则，不等同于生产容量承诺。
+
+“性能报告”页可以补充最低成功率、最低吞吐、TTFT/Latency P95 上限，以及硬件、框架版本和备注。保存后会用同一批原始样本重新分析。报告记录分析版本、run IDs 和生成时间，不包含 API Key、完整 prompt 或响应正文；可导出 JSON、独立 HTML、浏览器打印 PDF，以及复制或下载 PNG 长图。整个过程不需要配置外部模型 API。
+
 ## API
 
 启动后访问 <http://127.0.0.1:8080/docs> 查看 OpenAPI 文档。核心接口：
@@ -200,6 +208,9 @@ Compare 会先按并发档对重复轮次求均值，再进行评分，并展示
 - `POST /api/suites/{suite_id}/cancel`
 - `DELETE /api/runs/{id}`
 - `GET /api/compare?ids=a,b`
+- `GET|POST /api/reports`
+- `GET|PUT|DELETE /api/reports/{id}`
+- `GET /api/reports/{id}/export`
 
 ## 测试
 

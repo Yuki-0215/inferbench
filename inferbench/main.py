@@ -20,7 +20,8 @@ from fastapi.staticfiles import StaticFiles
 
 from .database import Repository
 from .metrics import aggregate_repetitions, compare_runs, summarize
-from .models import DiscoveryRequest, RunCreate
+from .models import DiscoveryRequest, ReportCreate, ReportUpdate, RunCreate
+from .reporting import ReportManager
 from .runner import RunManager
 
 PACKAGE_DIR = Path(__file__).resolve().parent
@@ -28,7 +29,8 @@ STATIC_DIR = PACKAGE_DIR / "static"
 DEFAULT_DATA_DIR = Path(os.environ.get("INFERBENCH_DATA_DIR", Path.cwd() / "data"))
 
 repository = Repository(DEFAULT_DATA_DIR / "inferbench.db")
-manager = RunManager(repository)
+report_manager = ReportManager(repository)
+manager = RunManager(repository, report_manager)
 
 
 def run_payload(run: dict[str, Any], include_samples: bool = False) -> dict[str, Any]:
@@ -49,7 +51,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(
     title="InferBench Local",
-    version="0.1.5",
+    version="0.1.6",
     description="Local-first benchmark console for OpenAI-compatible inference servers.",
     lifespan=lifespan,
 )
@@ -231,6 +233,73 @@ async def compare(
     result = compare_runs(items)
     result["aggregation"] = "repetition_mean" if aggregate else "none"
     return result
+
+
+@app.get("/api/reports")
+async def list_reports(limit: int = Query(default=100, ge=1, le=500)) -> list[dict[str, Any]]:
+    return repository.list_reports(limit)
+
+
+@app.post("/api/reports", status_code=201)
+async def create_report(config: ReportCreate) -> dict[str, Any]:
+    try:
+        return report_manager.generate(
+            config.suite_id,
+            title=config.title,
+            criteria=config.criteria.model_dump(),
+            environment=config.environment,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+
+
+@app.get("/api/reports/by-suite/{suite_id}")
+async def get_report_by_suite(suite_id: str) -> dict[str, Any]:
+    report = repository.get_report_by_suite(suite_id)
+    if not report:
+        raise HTTPException(status_code=404, detail="report not found")
+    return report
+
+
+@app.get("/api/reports/{report_id}")
+async def get_report(report_id: str) -> dict[str, Any]:
+    report = repository.get_report(report_id)
+    if not report:
+        raise HTTPException(status_code=404, detail="report not found")
+    return report
+
+
+@app.put("/api/reports/{report_id}")
+async def update_report(report_id: str, config: ReportUpdate) -> dict[str, Any]:
+    report = repository.get_report(report_id)
+    if not report:
+        raise HTTPException(status_code=404, detail="report not found")
+    return report_manager.generate(
+        report["suite_id"],
+        title=config.title or report["title"],
+        criteria=config.criteria.model_dump() if config.criteria is not None else report["criteria"],
+        environment=config.environment if config.environment is not None else report["environment"],
+    )
+
+
+@app.get("/api/reports/{report_id}/export")
+async def export_report(report_id: str) -> Response:
+    report = repository.get_report(report_id)
+    if not report:
+        raise HTTPException(status_code=404, detail="report not found")
+    safe_id = re.sub(r"[^A-Za-z0-9_.-]+", "-", report_id)[:64] or "report"
+    return Response(
+        content=json.dumps(report, ensure_ascii=False, indent=2),
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="inferbench-{safe_id}.json"'},
+    )
+
+
+@app.delete("/api/reports/{report_id}")
+async def delete_report(report_id: str) -> dict[str, bool]:
+    if not repository.delete_report(report_id):
+        raise HTTPException(status_code=404, detail="report not found")
+    return {"deleted": True}
 
 
 MOCK_WORDS = (

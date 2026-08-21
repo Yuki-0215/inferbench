@@ -7,7 +7,7 @@
   <meta name="description" content="Local-first benchmark console for vLLM and SGLang">
   <title>InferBench Local</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%2311130f'/%3E%3Cpath d='M14 14h10v36H14zm16 0h12c7 0 11 4 11 9 0 4-2 7-6 8 5 1 8 4 8 9 0 6-5 10-13 10H30zm10 14c3 0 4-1 4-3s-1-3-4-3h-1v6zm1 14c3 0 5-1 5-4s-2-4-5-4h-2v8z' fill='%23dfff52'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="/static/styles.css?v=20260821-1">
+  <link rel="stylesheet" href="/static/styles.css?v=20260821-2">
 </head>
 <body>
   <div class="noise" aria-hidden="true"></div>
@@ -118,6 +118,7 @@ Write a Python percentile function.</textarea>
       <nav class="view-tabs" aria-label="页面视图">
         <button class="view-tab active" data-view="observe">实验监测 <span id="runCount">0</span></button>
         <button class="view-tab" data-view="compare">性能对比 <span id="compareCount">0</span></button>
+        <button class="view-tab" data-view="report">性能报告 <span id="reportCount">0</span></button>
         <div class="local-badge">数据仅存本地</div>
       </nav>
 
@@ -138,6 +139,7 @@ Write a Python percentile function.</textarea>
               <p id="runSubtitle">—</p>
             </div>
             <div class="run-actions">
+              <button id="viewReportBtn" class="text-button hidden" type="button" data-capture-hide>查看报告</button>
               <button id="copyScreenshotBtn" class="capture-button" type="button" data-capture-hide title="复制包含指标和测试图的 PNG">
                 <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="6" y="6" width="10" height="10" rx="2"></rect><path d="M4 13H3a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"></path></svg>
                 <span>复制测试图</span>
@@ -191,6 +193,26 @@ Write a Python percentile function.</textarea>
           <p class="compare-placeholder">在右侧历史记录勾选 2–8 个实验。第一个被选中的实验作为基线。</p>
         </div>
       </section>
+
+      <section id="reportView" class="view report-view">
+        <div class="report-toolbar" data-capture-hide>
+          <div><div class="section-label"><span>03</span> PERFORMANCE DOSSIER</div><h2>本地性能评估报告</h2></div>
+          <div class="report-toolbar-actions">
+            <label class="report-picker"><span>报告</span><select id="reportSelect" aria-label="选择性能报告"></select></label>
+            <button id="reportSettingsBtn" class="text-button" type="button">评估标准</button>
+            <button id="regenerateReportBtn" class="text-button" type="button">重新分析</button>
+            <button id="copyReportBtn" class="capture-button" type="button"><span>复制长图</span></button>
+            <button id="exportReportJsonBtn" class="text-button" type="button">JSON</button>
+            <button id="exportReportHtmlBtn" class="text-button" type="button">HTML</button>
+            <button id="printReportBtn" class="compare-button" type="button">打印 / PDF</button>
+          </div>
+        </div>
+        <div id="reportEmpty" class="report-empty">
+          <span>AUTO REPORT</span><h2>等待一组完整压测</h2>
+          <p>并发矩阵全部进入终态后，会自动生成可追溯的图文报告。已有实验组也可以手动生成。</p>
+        </div>
+        <article id="reportCapture" class="report-paper hidden"></article>
+      </section>
     </section>
 
     <aside class="history-panel">
@@ -215,6 +237,22 @@ Write a Python percentile function.</textarea>
   </main>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/static/app.js?v=20260821-1" defer></script>
+  <dialog id="reportSettingsDialog" class="report-dialog">
+    <form id="reportSettingsForm" method="dialog">
+      <header><div><span>REPORT CRITERIA</span><h2>评估标准与环境</h2></div><button value="cancel" aria-label="关闭" type="submit">×</button></header>
+      <p>留空表示不设硬性 SLO；系统仍会根据成功率、吞吐增益和尾延迟识别推荐并发。</p>
+      <div class="report-dialog-grid">
+        <label><span>最低成功率 / %</span><input name="min_success_rate" type="number" min="0" max="100" step="0.1" placeholder="例如 99.9"></label>
+        <label><span>最低吞吐 / tok/s</span><input name="min_output_throughput_tps" type="number" min="0" step="0.1"></label>
+        <label><span>TTFT P95 上限 / ms</span><input name="max_ttft_p95_ms" type="number" min="0" step="1"></label>
+        <label><span>Latency P95 上限 / ms</span><input name="max_latency_p95_ms" type="number" min="0" step="1"></label>
+        <label><span>硬件</span><input name="hardware" maxlength="120" placeholder="例如 2× NVIDIA H100 80GB"></label>
+        <label><span>推理框架版本</span><input name="framework_version" maxlength="80" placeholder="例如 vLLM 0.10.0"></label>
+        <label class="wide"><span>备注</span><input name="notes" maxlength="240" placeholder="量化方式、TP、容器版本等"></label>
+      </div>
+      <footer><button value="cancel" type="submit" class="text-button">取消</button><button id="saveReportSettingsBtn" value="default" type="button" class="compare-button">保存并重新分析</button></footer>
+    </form>
+  </dialog>
+  <script src="/static/app.js?v=20260821-2" defer></script>
 </body>
 </html>
