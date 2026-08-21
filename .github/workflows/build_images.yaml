@@ -6,7 +6,7 @@ on:
       - master
       - lixie
     tags:
-      - "v*"
+      - "v0.1.5"
   workflow_dispatch:
 
 concurrency:
@@ -19,6 +19,7 @@ permissions:
 env:
   REGISTRY: uhub.service.ucloud.cn
   IMAGE_NAME: openbayes_common/inferbench
+  IMAGE_TAG: v0.1.5
 
 jobs:
   build-and-push:
@@ -40,28 +41,6 @@ jobs:
             exit 1
           fi
 
-      - name: Resolve immutable image tag
-        id: image
-        shell: bash
-        run: |
-          version="v$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
-
-          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
-            if [[ "${GITHUB_REF_NAME}" != "${version}" ]]; then
-              echo "::error::Git tag ${GITHUB_REF_NAME} does not match pyproject.toml version ${version}."
-              exit 1
-            fi
-            image_tag="${GITHUB_REF_NAME}"
-          else
-            branch="$(printf '%s' "${GITHUB_REF_NAME}" | tr '[:upper:]/_' '[:lower:]--' | tr -cd 'a-z0-9.-')"
-            image_tag="${version}-${branch}-${GITHUB_SHA::7}"
-          fi
-
-          image_ref="${REGISTRY}/${IMAGE_NAME}:${image_tag}"
-          echo "tag=${image_tag}" >> "${GITHUB_OUTPUT}"
-          echo "ref=${image_ref}" >> "${GITHUB_OUTPUT}"
-          echo "Building ${image_ref}"
-
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
 
@@ -82,7 +61,7 @@ jobs:
           file: ./Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ steps.image.outputs.ref }}
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: false
@@ -91,6 +70,6 @@ jobs:
         run: |
           echo "### InferBench image published" >> "${GITHUB_STEP_SUMMARY}"
           echo '```text' >> "${GITHUB_STEP_SUMMARY}"
-          echo "${{ steps.image.outputs.ref }}" >> "${GITHUB_STEP_SUMMARY}"
+          echo "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}" >> "${GITHUB_STEP_SUMMARY}"
           echo '```' >> "${GITHUB_STEP_SUMMARY}"
           echo "Platforms: linux/amd64, linux/arm64" >> "${GITHUB_STEP_SUMMARY}"
