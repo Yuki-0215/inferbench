@@ -2,12 +2,14 @@ name: Build and push InferBench image
 
 on:
   push:
-    branches:
-      - master
-      - lixie
     tags:
-      - "v0.1.5"
+      - "v*"
   workflow_dispatch:
+    inputs:
+      image_tag:
+        description: Image tag to build, for example v0.1.6
+        required: true
+        type: string
 
 concurrency:
   group: inferbench-image-${{ github.ref }}
@@ -19,7 +21,6 @@ permissions:
 env:
   REGISTRY: uhub.service.ucloud.cn
   IMAGE_NAME: openbayes_common/inferbench
-  IMAGE_TAG: v0.1.5
 
 jobs:
   build-and-push:
@@ -41,6 +42,25 @@ jobs:
             exit 1
           fi
 
+      - name: Resolve image tag
+        id: image
+        env:
+          MANUAL_IMAGE_TAG: ${{ inputs.image_tag }}
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            image_tag="${GITHUB_REF_NAME}"
+          else
+            image_tag="${MANUAL_IMAGE_TAG}"
+          fi
+
+          if [[ ! "${image_tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Image tag must be a version such as v0.1.6."
+            exit 1
+          fi
+
+          echo "tag=${image_tag}" >> "${GITHUB_OUTPUT}"
+          echo "Building ${REGISTRY}/${IMAGE_NAME}:${image_tag}"
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
 
@@ -61,7 +81,7 @@ jobs:
           file: ./Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.image.outputs.tag }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: false
@@ -70,6 +90,6 @@ jobs:
         run: |
           echo "### InferBench image published" >> "${GITHUB_STEP_SUMMARY}"
           echo '```text' >> "${GITHUB_STEP_SUMMARY}"
-          echo "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}" >> "${GITHUB_STEP_SUMMARY}"
+          echo "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.image.outputs.tag }}" >> "${GITHUB_STEP_SUMMARY}"
           echo '```' >> "${GITHUB_STEP_SUMMARY}"
           echo "Platforms: linux/amd64, linux/arm64" >> "${GITHUB_STEP_SUMMARY}"
