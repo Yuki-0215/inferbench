@@ -18,7 +18,7 @@ class RunCreate(BaseModel):
     concurrency: int = Field(default=4, ge=1, le=256)
     requests: int = Field(default=20, ge=1, le=10_000)
     warmup_requests: int = Field(default=1, ge=0, le=100)
-    max_tokens: int = Field(default=64, ge=1, le=8192)
+    max_tokens: int = Field(default=128, ge=1, le=8192)
     temperature: float = Field(default=0.0, ge=0.0, le=2.0)
     timeout_s: float = Field(default=120.0, ge=1.0, le=1800.0)
     prompts: list[str] = Field(
