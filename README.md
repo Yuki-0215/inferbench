@@ -32,7 +32,7 @@ InferBench 通过 OpenAI-compatible API 对远端 vLLM 服务持续发起并发�
 - 选择 2–8 次实验，以首项为基线对比并生成透明综合评分
 - 内置 mock OpenAI endpoint，无 GPU 也能跑通完整流程
 
-详细设计见 [ARCHITECTURE.md](ARCHITECTURE.md)。
+详细设计见 [ARCHITECTURE.md](ARCHITECTURE.md)，代码贡献与版本发布规则见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## Docker 部署（推荐）
 
