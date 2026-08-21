@@ -1,0 +1,96 @@
+name: Build and push InferBench image
+
+on:
+  push:
+    branches:
+      - master
+      - lixie
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+concurrency:
+  group: inferbench-image-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY: uhub.service.ucloud.cn
+  IMAGE_NAME: openbayes_common/inferbench
+
+jobs:
+  build-and-push:
+    name: Build linux/amd64 and linux/arm64
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Validate registry credentials
+        env:
+          UCLOUD_USER: ${{ secrets.UCLOUD_USER }}
+          UCLOUD_PASS: ${{ secrets.UCLOUD_PASS }}
+        run: |
+          if [[ -z "${UCLOUD_USER}" || -z "${UCLOUD_PASS}" ]]; then
+            echo "::error::Configure UCLOUD_USER and UCLOUD_PASS in repository Actions secrets."
+            exit 1
+          fi
+
+      - name: Resolve immutable image tag
+        id: image
+        shell: bash
+        run: |
+          version="v$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
+
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            if [[ "${GITHUB_REF_NAME}" != "${version}" ]]; then
+              echo "::error::Git tag ${GITHUB_REF_NAME} does not match pyproject.toml version ${version}."
+              exit 1
+            fi
+            image_tag="${GITHUB_REF_NAME}"
+          else
+            branch="$(printf '%s' "${GITHUB_REF_NAME}" | tr '[:upper:]/_' '[:lower:]--' | tr -cd 'a-z0-9.-')"
+            image_tag="${version}-${branch}-${GITHUB_SHA::7}"
+          fi
+
+          image_ref="${REGISTRY}/${IMAGE_NAME}:${image_tag}"
+          echo "tag=${image_tag}" >> "${GITHUB_OUTPUT}"
+          echo "ref=${image_ref}" >> "${GITHUB_OUTPUT}"
+          echo "Building ${image_ref}"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to UCloud registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.UCLOUD_USER }}
+          password: ${{ secrets.UCLOUD_PASS }}
+
+      - name: Build and push multi-architecture image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.image.outputs.ref }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+
+      - name: Publish build summary
+        run: |
+          echo "### InferBench image published" >> "${GITHUB_STEP_SUMMARY}"
+          echo '```text' >> "${GITHUB_STEP_SUMMARY}"
+          echo "${{ steps.image.outputs.ref }}" >> "${GITHUB_STEP_SUMMARY}"
+          echo '```' >> "${GITHUB_STEP_SUMMARY}"
+          echo "Platforms: linux/amd64, linux/arm64" >> "${GITHUB_STEP_SUMMARY}"
