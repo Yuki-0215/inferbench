@@ -588,12 +588,13 @@ $("#discoverBtn").addEventListener("click",async()=>{
     form.elements.endpoint.value=result.chat_endpoint;
     form.elements.model.value=result.models[0].id;
     const model=result.models[0], length=model.max_model_len ? ` · context ${Number(model.max_model_len).toLocaleString()}` : "";
+    form.elements.name.value=String(model.id).slice(0, form.elements.name.maxLength || 80);
     $("#formNote").classList.remove("error");
-    $("#formNote").textContent=`已识别 ${result.models.length} 个模型；当前使用 ${model.id}${length}。`;
+    $("#formNote").textContent=`已识别 ${result.models.length} 个模型；已填写模型与实验名称：${model.id}${length}。`;
     toast(`连接成功：${model.id}`);
   } catch(error) {
     $("#formNote").classList.add("error"); $("#formNote").textContent=error.message;
-  } finally { button.disabled=false; button.innerHTML="<span>⌁</span><strong>检测服务并自动填写模型</strong><small>支持直接粘贴 /v1/models</small>"; }
+  } finally { button.disabled=false; button.innerHTML="<span>⌁</span><strong>检测服务并自动填写模型与实验名称</strong><small>支持直接粘贴 /v1/models</small>"; }
 });
 
 $$('.view-tab').forEach(tab=>tab.addEventListener("click",()=>setView(tab.dataset.view)));

@@ -30,6 +30,23 @@ def main() -> None:
         assert page.locator('[name="requests"]').input_value() == "128"
         assert page.locator('[name="max_tokens"]').input_value() == "128"
 
+        page.route(
+            "**/api/discover",
+            lambda route: route.fulfill(
+                status=200,
+                content_type="application/json",
+                body='{"chat_endpoint":"https://example.com/v1/chat/completions","models":[{"id":"detected-model","max_model_len":32768}]}',
+            ),
+        )
+        page.locator('[name="endpoint"]').fill("https://example.com/v1/models")
+        page.locator("#discoverBtn").click()
+        assert page.locator('[name="endpoint"]').input_value() == "https://example.com/v1/chat/completions"
+        assert page.locator('[name="model"]').input_value() == "detected-model"
+        assert page.locator('[name="name"]').input_value() == "detected-model"
+        assert "已填写模型与实验名称" in page.locator("#formNote").inner_text()
+        page.unroute("**/api/discover")
+        page.locator('[data-preset="mock"]').click()
+
         cancel_ids = []
         for repetition in range(1, 4):
             response = page.request.post(

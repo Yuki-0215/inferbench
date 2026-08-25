@@ -165,7 +165,7 @@ inferbench --data-dir /path/to/local-data
 https://inference.example.com/v1/chat/completions
 ```
 
-也可以直接粘贴 `.../v1/models`，点击“检测服务并识别模型”。工具会读取模型 ID，并自动转换成对应的 `/v1/chat/completions` 地址。
+也可以直接粘贴 `.../v1/models`，点击“检测服务并自动填写模型与实验名称”。工具会读取模型 ID，将其同步填写为模型和实验名称，并自动转换成对应的 `/v1/chat/completions` 地址。
 
 API Key 有两种安全等级不同的输入方式：
 
