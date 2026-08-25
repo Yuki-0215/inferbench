@@ -43,7 +43,20 @@ git push --force-with-lease origin lixie
 
 禁止使用 `git push --force`。
 
-## 4. 创建 PR
+## 4. 同步开发预览服务
+
+代码更新通过验证并推送 `lixie` 后，将准确的提交同步到开发预览容器：
+
+- SSH：`root@bj.office.openbayes.com:30993`
+- 服务端口：`8080`
+- 持久化根目录：`/openbayes/home/inferbench`
+- 数据目录：`/openbayes/home/inferbench/data`
+
+部署必须使用以 commit 标识的独立 release 目录，再原子更新 `current` 软链接；不得覆盖或迁移持久化数据库。重启后必须检查 runit 状态、`/api/health` 和本次变更对应的静态资源或 API 行为。
+
+该步骤只更新开发预览服务，不代表 PR 已获准合并，也不触发 Docker 镜像构建或发布 Tag。
+
+## 5. 创建 PR
 
 创建 `lixie -> master` 的正式 PR，并在描述中记录：
 
@@ -56,7 +69,7 @@ PR 必须保持可审查、无冲突，并且只包含当前需求的差异。
 
 PR 使用仓库模板记录意图、验收标准、验证证据、风险和发布计划。CI 中的质量反馈必须通过；失败信息应能通过 `./scripts/verify.sh` 在开发环境复现。
 
-## 5. 管理员确认并合并 PR
+## 6. 管理员确认并合并 PR
 
 PR 创建后进入第一个强制审批门：
 
@@ -64,7 +77,7 @@ PR 创建后进入第一个强制审批门：
 - 开发执行者不得代替管理员合并 PR。
 - 在管理员完成合并前，不得创建或移动发布 Tag。
 
-## 6. 合并后确认版本
+## 7. 合并后确认版本
 
 管理员合并 PR 后，重新同步并确认发布目标：
 
@@ -81,7 +94,7 @@ git log -1 --oneline origin/master
 - 向管理员提出计划创建的 Tag 版本。
 - 只有管理员明确确认该版本后，才能创建并推送 Tag。
 
-## 7. 创建发布 Tag
+## 8. 创建发布 Tag
 
 收到管理员明确确认后，在最新 `origin/master` 上创建带注释的 Tag：
 
@@ -92,7 +105,7 @@ git push origin refs/tags/v0.1.6
 
 发布 Tag 原则上不可移动或覆盖。如果构建失败且镜像从未成功发布，仍需再次获得管理员确认，才能删除并重建同名 Tag；已成功发布的版本应使用新的补丁版本。
 
-## 8. GitHub Actions 构建与验收
+## 9. GitHub Actions 构建与验收
 
 推送 `v*` Tag 后，GitHub Actions 自动：
 
@@ -109,6 +122,7 @@ git push origin refs/tags/v0.1.6
 - [ ] 本次提交未包含无关或用户未授权的修改
 - [ ] 代码与配置校验通过
 - [ ] 未在本地构建或推送 Docker 镜像
+- [ ] 已同步开发预览服务并验证 8080 健康状态
 - [ ] 已创建 `lixie -> master` PR
 - [ ] 管理员已确认并合并 PR
 - [ ] 已再次向管理员确认发布 Tag 版本
