@@ -55,6 +55,18 @@ app = FastAPI(
     description="Local-first benchmark console for OpenAI-compatible inference servers.",
     lifespan=lifespan,
 )
+
+
+@app.middleware("http")
+async def disable_frontend_caching(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path == "/" or request.url.path.startswith("/static/"):
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
+
+
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
