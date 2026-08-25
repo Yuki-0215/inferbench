@@ -43,8 +43,9 @@ models -> adapter/database/metrics -> runner -> main
 6. 实现最小而完整的改动，并更新对应的事实来源文档。
 7. 执行 `./scripts/verify.sh`，然后检查完整 diff。
 8. 推送 `lixie`，创建或更新 `lixie -> master` PR。
-9. 停在管理员审查和合并审批门。
-10. PR 合并后，单独向管理员确认准确的发布 Tag。
+9. 将已验证的准确提交同步到 `root@bj.office.openbayes.com:30993`，保留持久化数据并验证 8080 健康状态。
+10. 停在管理员审查和合并审批门。
+11. PR 合并后，单独向管理员确认准确的发布 Tag。
 
 没有管理员对应阶段的明确确认，禁止合并 PR，也禁止创建、移动或删除发布 Tag。
 
