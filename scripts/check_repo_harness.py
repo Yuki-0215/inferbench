@@ -126,7 +126,14 @@ def check_release_invariants(errors: list[str]) -> None:
         fail(errors, "Dockerfile must copy LICENSE before installing the package")
 
     workflow = (ROOT / ".github/workflows/build_images.yaml").read_text(encoding="utf-8")
-    for expected in ('- "v*"', "linux/amd64,linux/arm64", "openbayes_common/inferbench"):
+    for expected in (
+        '- "v*"',
+        "github.ref_name",
+        'refs/tags/${image_tag}',
+        "v${source_version}",
+        "linux/amd64,linux/arm64",
+        "openbayes_common/inferbench",
+    ):
         if expected not in workflow:
             fail(errors, f"image workflow is missing invariant: {expected}")
     if ":latest" in workflow:
