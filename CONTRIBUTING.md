@@ -86,7 +86,7 @@ git fetch origin --prune --tags
 git log -1 --oneline origin/master
 ```
 
-检查项目声明版本与计划发布版本一致。版本采用语义化格式，例如 `v0.1.6`、`v0.1.7`。
+检查项目声明版本与计划发布版本一致。发布 Tag 采用 `vX.Y.Z` 语义化格式。
 
 随后进入第二个强制审批门：
 
@@ -99,8 +99,10 @@ git log -1 --oneline origin/master
 收到管理员明确确认后，在最新 `origin/master` 上创建带注释的 Tag：
 
 ```bash
-git tag -a v0.1.7 origin/master -m "InferBench v0.1.7"
-git push origin refs/tags/v0.1.7
+RELEASE_VERSION="$(python3 -c 'from inferbench import __version__; print(__version__)')"
+RELEASE_TAG="v${RELEASE_VERSION}"
+git tag -a "${RELEASE_TAG}" origin/master -m "InferBench ${RELEASE_TAG}"
+git push origin "refs/tags/${RELEASE_TAG}"
 ```
 
 发布 Tag 原则上不可移动或覆盖。如果构建失败且镜像从未成功发布，仍需再次获得管理员确认，才能删除并重建同名 Tag；已成功发布的版本应使用新的补丁版本。

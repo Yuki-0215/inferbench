@@ -80,22 +80,19 @@ def regex_value(path: str, pattern: str, errors: list[str]) -> str | None:
 
 def check_versions(errors: list[str]) -> None:
     with (ROOT / "pyproject.toml").open("rb") as handle:
-        project_version = tomllib.load(handle)["project"]["version"]
-    versions = {
-        "pyproject.toml": project_version,
-        "inferbench/__init__.py": regex_value(
-            "inferbench/__init__.py", r'^__version__\s*=\s*"([^"]+)"', errors
-        ),
-        "inferbench/main.py": regex_value(
-            "inferbench/main.py", r'^\s*version\s*=\s*"([^"]+)"', errors
-        ),
-        "scripts/build-multiarch.sh": regex_value(
-            "scripts/build-multiarch.sh", r'^TAG="\$\{TAG:-v([^}]+)\}"', errors
-        ),
+        project = tomllib.load(handle)["project"]
+    if "version" not in project.get("dynamic", []):
+        fail(errors, "pyproject.toml must derive its version dynamically")
+    regex_value("inferbench/version.py", r'^__version__\s*=\s*"([^"]+)"', errors)
+
+    expected_references = {
+        "inferbench/__init__.py": "from .version import __version__",
+        "inferbench/main.py": "version=__version__",
+        "scripts/build-multiarch.sh": "from inferbench import __version__",
     }
-    for source, value in versions.items():
-        if value is not None and value != project_version:
-            fail(errors, f"version drift: {source} has {value}, expected {project_version}")
+    for source, expected in expected_references.items():
+        if expected not in (ROOT / source).read_text(encoding="utf-8"):
+            fail(errors, f"{source} must derive the release version from inferbench/version.py")
 
 
 def imported_local_modules(tree: ast.AST) -> set[str]:
