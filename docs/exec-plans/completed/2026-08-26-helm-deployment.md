@@ -1,9 +1,9 @@
 # Helm / Kubernetes 部署支持
 
-- 状态：active
+- 状态：completed
 - 创建日期：2026-08-26
 - 负责人：Codex
-- 关联 Issue/PR：待创建
+- 关联 Issue/PR：https://github.com/Yuki-0215/inferbench/pull/9
 
 ## 目标
 
@@ -29,7 +29,7 @@
 - [x] 实现 Chart、默认 values、schema、Deployment、Service、PVC、Ingress 和 Helm test。
 - [x] 增加默认与高级配置渲染、错误配置守卫测试。
 - [x] 接入统一验证和 GitHub Actions，更新 README、架构与质量文档。
-- [ ] 执行完整验证、提交 PR，并同步开发预览服务。
+- [x] 执行完整验证、提交 PR，并同步开发预览服务。
 
 ## 决策日志
 
@@ -46,7 +46,7 @@
 - [x] `helm lint` 和 `helm package`
 - [x] 默认、Ingress、已有 PVC、Secret、volume permissions 渲染通过
 - [x] 缺少镜像 Tag 和多副本配置会被拒绝
-- [x] 文档已更新；PR 描述将在创建 PR 时补充
+- [x] 文档已更新；PR #9 已创建并补充部署与验证说明
 
 ## 风险、回滚与后续
 
