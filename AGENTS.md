@@ -22,6 +22,7 @@
 - `inferbench/runner.py`：队列、并发、取消和任务生命周期。
 - `inferbench/main.py`：FastAPI 控制面、服务发现、Mock 服务与导出。
 - `inferbench/static/`：无前端框架依赖的仪表盘。
+- `charts/inferbench/`：单副本、持久化的 Kubernetes Helm 部署。
 - `tests/`：单元测试、API 测试和浏览器冒烟测试。
 - `scripts/`：仓库检查与发布辅助工具。
 

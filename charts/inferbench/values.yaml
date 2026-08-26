@@ -1,0 +1,99 @@
+replicaCount: 1
+revisionHistoryLimit: 3
+
+image:
+  repository: uhub.service.ucloud.cn/openbayes_common/inferbench
+  # Required. Use an existing Git release tag, for example: vX.Y.Z.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+podAnnotations: {}
+podLabels: {}
+automountServiceAccountToken: false
+
+podSecurityContext:
+  fsGroup: 10001
+  fsGroupChangePolicy: OnRootMismatch
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+
+service:
+  type: ClusterIP
+  port: 80
+  annotations: {}
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: inferbench.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+persistence:
+  enabled: true
+  existingClaim: ""
+  storageClass: ""
+  accessModes:
+    - ReadWriteOnce
+  size: 10Gi
+  retain: true
+  annotations: {}
+
+# Enable only when the storage driver does not honor fsGroup and /data is not writable.
+volumePermissions:
+  enabled: false
+  image:
+    repository: busybox
+    tag: "1.37.0"
+    pullPolicy: IfNotPresent
+
+apiKey:
+  # Reference an existing Secret; raw API keys are intentionally unsupported.
+  existingSecret: ""
+  key: api-key
+
+extraEnvFrom: []
+extraVolumes: []
+extraVolumeMounts: []
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits: {}
+
+livenessProbe:
+  enabled: true
+  initialDelaySeconds: 10
+  periodSeconds: 30
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+readinessProbe:
+  enabled: true
+  initialDelaySeconds: 3
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+terminationGracePeriodSeconds: 30

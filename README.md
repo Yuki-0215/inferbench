@@ -128,6 +128,70 @@ curl http://127.0.0.1:8080/api/health
 
 新机器默认从空的 `docker-data/` 开始，不需要迁移当前数据库。如果以后需要携带容器部署产生的历史记录，请先 `docker compose stop`，再复制整个 `docker-data/` 目录。
 
+## Helm / Kubernetes 部署
+
+仓库提供 [InferBench Helm Chart](charts/inferbench)。需要 Kubernetes 1.23+、Helm 3，以及可用的 ReadWriteOnce StorageClass。Chart 不写死应用版本，会自动选择仓库最新发布 Tag 作为安装变量：
+
+```bash
+INFERBENCH_TAG="$(git tag --list 'v*' --sort=-version:refname | head -n 1)"
+test -n "${INFERBENCH_TAG}"
+
+helm upgrade --install inferbench ./charts/inferbench \
+  --namespace inferbench \
+  --create-namespace \
+  --set-string image.tag="${INFERBENCH_TAG}"
+```
+
+检查状态并通过本地端口访问：
+
+```bash
+kubectl -n inferbench get pods,svc,pvc
+helm test inferbench -n inferbench
+kubectl -n inferbench port-forward service/inferbench 8080:80
+```
+
+然后打开 <http://127.0.0.1:8080>。
+
+如果 UHub 仓库需要登录，先创建拉取凭据，并在安装时引用它：
+
+```bash
+kubectl -n inferbench create secret docker-registry uhub-credentials \
+  --docker-server=uhub.service.ucloud.cn \
+  --docker-username="${UCLOUD_USER}" \
+  --docker-password="${UCLOUD_PASS}"
+
+helm upgrade --install inferbench ./charts/inferbench \
+  --namespace inferbench \
+  --create-namespace \
+  --set-string image.tag="${INFERBENCH_TAG}" \
+  --set 'imagePullSecrets[0].name=uhub-credentials'
+```
+
+使用已有 PVC 或已有 API Key Secret：
+
+```bash
+helm upgrade --install inferbench ./charts/inferbench \
+  --namespace inferbench \
+  --set-string image.tag="${INFERBENCH_TAG}" \
+  --set persistence.existingClaim=inferbench-data \
+  --set apiKey.existingSecret=inferbench-api
+```
+
+开启 Ingress 时必须同时配置入口控制器和域名，并在公网网关增加身份认证：
+
+```bash
+helm upgrade --install inferbench ./charts/inferbench \
+  --namespace inferbench \
+  --set-string image.tag="${INFERBENCH_TAG}" \
+  --set ingress.enabled=true \
+  --set ingress.className=nginx \
+  --set 'ingress.hosts[0].host=inferbench.example.com' \
+  --set 'ingress.hosts[0].paths[0].path=/' \
+  --set 'ingress.hosts[0].paths[0].pathType=Prefix'
+```
+
+默认 PVC 带有 `helm.sh/resource-policy: keep`，因此 `helm uninstall inferbench -n inferbench` 不会删除压测数据库。完整配置见 [values.yaml](charts/inferbench/values.yaml)。SQLite 架构只支持 `replicaCount: 1`，Chart 会拒绝多副本配置。
+
 ## Python 本地启动
 
 需要 Python 3.10+：
@@ -221,8 +285,10 @@ Compare 会先按并发档对重复轮次求均值，再进行评分，并展示
 ## 测试
 
 ```bash
-.venv/bin/pytest
+./scripts/verify.sh
 ```
+
+统一验证包含 Python 测试、仓库不变量、前端 JavaScript 语法和 Helm Chart 的默认/高级配置渲染。仅验证 Helm Chart 时可运行 `./scripts/verify-helm.sh`。
 
 ## 当前限制
 

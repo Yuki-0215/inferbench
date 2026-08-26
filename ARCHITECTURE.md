@@ -165,6 +165,15 @@ SQLite 启用 WAL 和外键。汇总值默认查询时由样本计算，保证�
 - 配置限制最大并发和最大请求数，避免误操作耗尽本机资源或产生意外云账单。
 - 取消采用 cooperative cancellation；已完成样本不丢失，run 标为 `cancelled`。
 
+### Kubernetes 部署不变量
+
+- Helm Deployment 固定为单副本并使用 `Recreate`，防止两个 Pod 同时写入同一 SQLite 数据库。
+- `/data` 使用 ReadWriteOnce PVC；Chart 卸载时默认保留 PVC，迁移和删除数据必须单独执行。
+- 容器继续以 UID/GID `10001` 非 root 运行，Pod 通过 `fsGroup` 获取卷写权限；仅在存储驱动不支持 `fsGroup` 时显式启用 volume-permissions init container。
+- 镜像 Tag 必须由安装命令传入并对应一个已发布 Git Tag，Chart 不维护重复的应用版本号。
+- API Key 只能引用已有 Kubernetes Secret；Chart 不接受明文 Key values。
+- 应用没有多租户鉴权。Ingress 默认关闭；对公网开放时必须在 Ingress 或网关层增加 HTTPS、身份认证和来源限制。
+
 ## 8. 扩展路线
 
 1. 增加 Completions、Embeddings 和自定义 adapter。
