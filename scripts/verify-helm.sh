@@ -25,9 +25,9 @@ chmod 600 "${KUBECONFIG}"
   --set-string image.tag="${IMAGE_TAG}" \
   >"${TASK_TMP_DIR}/default.yaml"
 
-rg -q 'type: Recreate' "${TASK_TMP_DIR}/default.yaml"
-rg -q 'helm.sh/resource-policy: keep' "${TASK_TMP_DIR}/default.yaml"
-rg -q "inferbench:${IMAGE_TAG}" "${TASK_TMP_DIR}/default.yaml"
+grep -q 'type: Recreate' "${TASK_TMP_DIR}/default.yaml"
+grep -q 'helm.sh/resource-policy: keep' "${TASK_TMP_DIR}/default.yaml"
+grep -q "inferbench:${IMAGE_TAG}" "${TASK_TMP_DIR}/default.yaml"
 
 "${HELM_BIN}" template inferbench "${ROOT_DIR}/charts/inferbench" \
   --namespace inferbench \
@@ -43,18 +43,18 @@ rg -q "inferbench:${IMAGE_TAG}" "${TASK_TMP_DIR}/default.yaml"
   --set 'ingress.hosts[0].paths[0].pathType=Prefix' \
   >"${TASK_TMP_DIR}/configured.yaml"
 
-rg -q 'claimName: inferbench-data' "${TASK_TMP_DIR}/configured.yaml"
-rg -q 'secretKeyRef:' "${TASK_TMP_DIR}/configured.yaml"
-rg -q 'name: uhub-credentials' "${TASK_TMP_DIR}/configured.yaml"
-rg -q 'ingressClassName: nginx' "${TASK_TMP_DIR}/configured.yaml"
-rg -q 'name: volume-permissions' "${TASK_TMP_DIR}/configured.yaml"
+grep -q 'claimName: inferbench-data' "${TASK_TMP_DIR}/configured.yaml"
+grep -q 'secretKeyRef:' "${TASK_TMP_DIR}/configured.yaml"
+grep -q 'name: uhub-credentials' "${TASK_TMP_DIR}/configured.yaml"
+grep -q 'ingressClassName: nginx' "${TASK_TMP_DIR}/configured.yaml"
+grep -q 'name: volume-permissions' "${TASK_TMP_DIR}/configured.yaml"
 
 if "${HELM_BIN}" template inferbench "${ROOT_DIR}/charts/inferbench" \
   >"${TASK_TMP_DIR}/missing-tag.log" 2>&1; then
   echo "chart unexpectedly accepted an empty image tag" >&2
   exit 1
 fi
-rg -q 'image.tag' "${TASK_TMP_DIR}/missing-tag.log"
+grep -q 'image.tag' "${TASK_TMP_DIR}/missing-tag.log"
 
 if "${HELM_BIN}" template inferbench "${ROOT_DIR}/charts/inferbench" \
   --set-string image.tag="${IMAGE_TAG}" \
@@ -63,14 +63,14 @@ if "${HELM_BIN}" template inferbench "${ROOT_DIR}/charts/inferbench" \
   echo "chart unexpectedly accepted multiple SQLite writers" >&2
   exit 1
 fi
-rg -q 'replicaCount' "${TASK_TMP_DIR}/replicas.log"
+grep -q 'replicaCount' "${TASK_TMP_DIR}/replicas.log"
 
 "${HELM_BIN}" template inferbench "${ROOT_DIR}/charts/inferbench" \
   --set-string image.tag="${IMAGE_TAG}" \
   --set persistence.enabled=false \
   >"${TASK_TMP_DIR}/ephemeral.yaml"
-rg -Fq 'emptyDir: {}' "${TASK_TMP_DIR}/ephemeral.yaml"
-if rg -q 'kind: PersistentVolumeClaim' "${TASK_TMP_DIR}/ephemeral.yaml"; then
+grep -Fq 'emptyDir: {}' "${TASK_TMP_DIR}/ephemeral.yaml"
+if grep -q 'kind: PersistentVolumeClaim' "${TASK_TMP_DIR}/ephemeral.yaml"; then
   echo "ephemeral mode unexpectedly rendered a PVC" >&2
   exit 1
 fi
@@ -82,6 +82,6 @@ if "${HELM_BIN}" template inferbench "${ROOT_DIR}/charts/inferbench" \
   echo "chart unexpectedly accepted a plaintext API Key value" >&2
   exit 1
 fi
-rg -q 'Additional property value is not allowed' "${TASK_TMP_DIR}/plaintext-secret.log"
+grep -q 'Additional property value is not allowed' "${TASK_TMP_DIR}/plaintext-secret.log"
 
 echo "[helm] lint, default render, configured render and guardrails passed"
