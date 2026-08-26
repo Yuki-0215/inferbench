@@ -5,14 +5,9 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
-    inputs:
-      release_tag:
-        description: Existing Git release tag to rebuild, for example vX.Y.Z
-        required: true
-        type: string
 
 concurrency:
-  group: inferbench-image-${{ github.event_name == 'push' && github.ref_name || inputs.release_tag }}
+  group: inferbench-image-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -32,7 +27,6 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'push' && github.ref || inputs.release_tag }}
           fetch-depth: 0
 
       - name: Validate registry credentials
@@ -45,14 +39,28 @@ jobs:
             exit 1
           fi
 
-      - name: Resolve image tag
+      - name: Resolve and check out release tag
         id: image
         env:
-          RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.release_tag }}
+          EVENT_NAME: ${{ github.event_name }}
+          TRIGGER_TAG: ${{ github.ref_name }}
         run: |
-          image_tag="${RELEASE_TAG}"
+          if [[ "${EVENT_NAME}" == "push" ]]; then
+            image_tag="${TRIGGER_TAG}"
+          else
+            image_tag=""
+            while IFS= read -r candidate; do
+              if [[ "${candidate}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+                image_tag="${candidate}"
+                break
+              fi
+            done < <(git tag --list "v*" --sort=-version:refname)
+          fi
 
-          if [[ ! "${image_tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+          if [[ -z "${image_tag}" ]]; then
+            echo "::error::Repository has no semantic release tag matching vX.Y.Z."
+            exit 1
+          elif [[ ! "${image_tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
             echo "::error::Image tag must be a semantic version such as vX.Y.Z."
             exit 1
           fi
@@ -61,6 +69,8 @@ jobs:
             echo "::error::Image tag must reference an existing Git tag: ${image_tag}."
             exit 1
           fi
+
+          git checkout --detach "refs/tags/${image_tag}"
 
           source_version="$(python3 -c 'from inferbench import __version__; print(__version__)')"
           if [[ "${image_tag}" != "v${source_version}" ]]; then
