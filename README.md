@@ -67,7 +67,7 @@ docker compose logs -f inferbench
 ### 构建并发布多架构镜像
 
 仓库发布脚本默认构建 `linux/amd64` 和 `linux/arm64`，并推送为
-`uhub.service.ucloud.cn/openbayes_common/inferbench:v0.1.6`。先登录 UHub：
+`uhub.service.ucloud.cn/openbayes_common/inferbench:v0.1.7`。先登录 UHub：
 
 ```bash
 docker login uhub.service.ucloud.cn
@@ -77,8 +77,8 @@ docker login uhub.service.ucloud.cn
 使用其他标签或镜像名：
 
 ```bash
-TAG=v0.1.6 ./scripts/build-multiarch.sh
-IMAGE=uhub.service.ucloud.cn/openbayes_common/inferbench TAG=v0.1.6 \
+TAG=v0.1.7 ./scripts/build-multiarch.sh
+IMAGE=uhub.service.ucloud.cn/openbayes_common/inferbench TAG=v0.1.7 \
   ./scripts/build-multiarch.sh
 ```
 
@@ -91,9 +91,9 @@ PUSH=0 ./scripts/build-multiarch.sh
 目标机器可直接使用发布镜像启动：
 
 ```bash
-INFERBENCH_IMAGE=uhub.service.ucloud.cn/openbayes_common/inferbench:v0.1.6 \
+INFERBENCH_IMAGE=uhub.service.ucloud.cn/openbayes_common/inferbench:v0.1.7 \
   docker compose pull
-INFERBENCH_IMAGE=uhub.service.ucloud.cn/openbayes_common/inferbench:v0.1.6 \
+INFERBENCH_IMAGE=uhub.service.ucloud.cn/openbayes_common/inferbench:v0.1.7 \
   docker compose up -d
 ```
 

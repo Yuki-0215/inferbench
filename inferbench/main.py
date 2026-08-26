@@ -51,7 +51,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(
     title="InferBench Local",
-    version="0.1.6",
+    version="0.1.7",
     description="Local-first benchmark console for OpenAI-compatible inference servers.",
     lifespan=lifespan,
 )
