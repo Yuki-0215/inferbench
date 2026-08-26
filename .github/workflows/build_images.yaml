@@ -6,13 +6,13 @@ on:
       - "v*"
   workflow_dispatch:
     inputs:
-      image_tag:
-        description: Image tag to build, for example vX.Y.Z
+      release_tag:
+        description: Existing Git release tag to rebuild, for example vX.Y.Z
         required: true
         type: string
 
 concurrency:
-  group: inferbench-image-${{ github.ref }}
+  group: inferbench-image-${{ github.event_name == 'push' && github.ref_name || inputs.release_tag }}
   cancel-in-progress: true
 
 permissions:
@@ -31,6 +31,9 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'push' && github.ref || inputs.release_tag }}
+          fetch-depth: 0
 
       - name: Validate registry credentials
         env:
@@ -45,16 +48,23 @@ jobs:
       - name: Resolve image tag
         id: image
         env:
-          MANUAL_IMAGE_TAG: ${{ inputs.image_tag }}
+          RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.release_tag }}
         run: |
-          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
-            image_tag="${GITHUB_REF_NAME}"
-          else
-            image_tag="${MANUAL_IMAGE_TAG}"
-          fi
+          image_tag="${RELEASE_TAG}"
 
           if [[ ! "${image_tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
             echo "::error::Image tag must be a semantic version such as vX.Y.Z."
+            exit 1
+          fi
+
+          if ! git show-ref --verify --quiet "refs/tags/${image_tag}"; then
+            echo "::error::Image tag must reference an existing Git tag: ${image_tag}."
+            exit 1
+          fi
+
+          source_version="$(python3 -c 'from inferbench import __version__; print(__version__)')"
+          if [[ "${image_tag}" != "v${source_version}" ]]; then
+            echo "::error::Git tag ${image_tag} does not match source version v${source_version}."
             exit 1
           fi
 
