@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "inferbench-local"
-version = "0.1.7"
+dynamic = ["version"]
 description = "Local-first benchmark console for vLLM, SGLang and OpenAI-compatible inference servers"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -25,6 +25,9 @@ inferbench = "inferbench.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["inferbench"]
+
+[tool.hatch.version]
+path = "inferbench/version.py"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

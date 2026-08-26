@@ -18,6 +18,7 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
+from . import __version__
 from .database import Repository
 from .metrics import aggregate_repetitions, compare_runs, summarize
 from .models import DiscoveryRequest, ReportCreate, ReportUpdate, RunCreate
@@ -51,7 +52,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(
     title="InferBench Local",
-    version="0.1.7",
+    version=__version__,
     description="Local-first benchmark console for OpenAI-compatible inference servers.",
     lifespan=lifespan,
 )

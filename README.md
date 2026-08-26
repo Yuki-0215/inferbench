@@ -66,10 +66,12 @@ docker compose logs -f inferbench
 
 ### 构建并发布多架构镜像
 
-仓库发布脚本默认构建 `linux/amd64` 和 `linux/arm64`，并推送为
-`uhub.service.ucloud.cn/openbayes_common/inferbench:v0.1.7`。先登录 UHub：
+仓库发布脚本默认从项目版本文件读取 Tag，构建 `linux/amd64` 和 `linux/arm64`，并推送到 UHub。先统一声明当前源码对应的镜像变量：
 
 ```bash
+INFERBENCH_VERSION="$(python3 -c 'from inferbench import __version__; print(__version__)')"
+INFERBENCH_TAG="v${INFERBENCH_VERSION}"
+INFERBENCH_IMAGE="uhub.service.ucloud.cn/openbayes_common/inferbench:${INFERBENCH_TAG}"
 docker login uhub.service.ucloud.cn
 ./scripts/build-multiarch.sh
 ```
@@ -77,8 +79,8 @@ docker login uhub.service.ucloud.cn
 使用其他标签或镜像名：
 
 ```bash
-TAG=v0.1.7 ./scripts/build-multiarch.sh
-IMAGE=uhub.service.ucloud.cn/openbayes_common/inferbench TAG=v0.1.7 \
+TAG="${INFERBENCH_TAG}" ./scripts/build-multiarch.sh
+IMAGE=uhub.service.ucloud.cn/openbayes_common/inferbench TAG="${INFERBENCH_TAG}" \
   ./scripts/build-multiarch.sh
 ```
 
@@ -91,10 +93,8 @@ PUSH=0 ./scripts/build-multiarch.sh
 目标机器可直接使用发布镜像启动：
 
 ```bash
-INFERBENCH_IMAGE=uhub.service.ucloud.cn/openbayes_common/inferbench:v0.1.7 \
-  docker compose pull
-INFERBENCH_IMAGE=uhub.service.ucloud.cn/openbayes_common/inferbench:v0.1.7 \
-  docker compose up -d
+INFERBENCH_IMAGE="${INFERBENCH_IMAGE}" docker compose pull
+INFERBENCH_IMAGE="${INFERBENCH_IMAGE}" docker compose up -d
 ```
 
 容器内只运行一个 InferBench 进程，并把 SQLite 数据写入 `/data`。Compose 将其挂载到项目内独立的 `./docker-data/`，所以这是一个**全新数据库**：当前项目的 `./data/inferbench.db` 不会复制或迁移进去。容器更新或重建不会丢失该部署后产生的数据，迁移到其他机器时也可以按需单独备份这个目录。
