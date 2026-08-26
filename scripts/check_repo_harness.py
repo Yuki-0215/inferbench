@@ -129,6 +129,8 @@ def check_release_invariants(errors: list[str]) -> None:
     for expected in (
         '- "v*"',
         "github.ref_name",
+        'git tag --list "v*" --sort=-version:refname',
+        'git checkout --detach "refs/tags/${image_tag}"',
         'refs/tags/${image_tag}',
         "v${source_version}",
         "linux/amd64,linux/arm64",

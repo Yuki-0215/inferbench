@@ -118,7 +118,7 @@ git push origin "refs/tags/${RELEASE_TAG}"
 5. 推送到 `uhub.service.ucloud.cn/openbayes_common/inferbench:<tag>`。
 6. 输出构建结果和镜像信息。
 
-需要手动重跑时，只能在 `workflow_dispatch` 中填写已经存在的 `release_tag`；不能输入一个没有对应 Git Tag 的任意镜像版本。
+需要手动重跑时无需填写版本；`workflow_dispatch` 会按语义化版本排序自动选择仓库中最新的 `v*` Tag，并检出该 Tag 构建同名镜像。
 
 发布执行者需要持续检查 Actions，直到成功或得到明确失败原因。成功后应确认镜像 Tag、架构清单和 digest，并向管理员报告。
 
