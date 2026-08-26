@@ -11,16 +11,18 @@
 | 仓库结构 | 自动检查 | `scripts/check_repo_harness.py` |
 | 文档导航 | 自动检查 | Markdown 相对链接与必需文档检查 |
 | Python 依赖方向 | 自动检查 | AST 结构规则 |
-| 版本一致性 | 自动检查 | 包、API 与本地发布脚本版本对齐 |
+| 版本一致性 | 自动检查 | `inferbench/version.py` 单一版本源与全部消费者引用 |
 | 镜像发布 | GitHub Actions | Tag 驱动、amd64/arm64、UCloud Registry |
+| Helm 部署 | 自动检查 | lint、默认/高级渲染、单副本与持久化守卫 |
 | UI 行为 | 部分自动化 | Playwright smoke 覆盖仪表盘、截图、批量删除与性能报告，尚未全部纳入默认 CI |
 
 ## 黄金不变量
 
 - Python 模块依赖只能沿 `models -> adapter/database/metrics -> reporting -> runner -> main` 前进。
-- `pyproject.toml`、包版本、FastAPI 版本和发布脚本默认版本必须一致。
+- 包元数据、FastAPI 和发布脚本必须从 `inferbench/version.py` 派生版本。
 - Docker 打包必须包含 `LICENSE`。
 - 发布工作流只接受版本 Tag，不推送 `latest`，并同时构建 amd64/arm64。
+- Helm Chart 不写死镜像版本，固定单副本与 `Recreate`，并默认保留 SQLite PVC。
 - API Key 不持久化、不回显、不记录。
 - 文档入口必须存在且相对链接有效。
 
@@ -28,7 +30,6 @@
 
 | 优先级 | 项目 | 风险 | 建议下一步 |
 |---|---|---|---|
-| P1 | 版本号仍在多个文件重复声明 | 发布时可能漂移 | 改为从包元数据读取单一版本源。 |
 | P1 | 浏览器 smoke 未进入默认 CI | UI 回归可能漏检 | 提供可重复的无头浏览器 fixture 后纳入 CI。 |
 | P2 | 缺少服务端 GPU 指标 | 客户端吞吐不能解释 GPU 瓶颈 | 设计可选 telemetry adapter。 |
 | P2 | 缺少固定数据集 manifest | 跨时间实验可复现性有限 | 导出 prompt 指纹和完整实验 manifest。 |

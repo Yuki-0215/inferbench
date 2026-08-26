@@ -27,4 +27,7 @@ fi
 echo "[verify] frontend JavaScript syntax"
 node --check inferbench/static/app.js
 
+echo "[verify] Helm chart"
+INFERBENCH_PYTHON="${PYTHON_BIN}" ./scripts/verify-helm.sh
+
 echo "[verify] all checks passed"

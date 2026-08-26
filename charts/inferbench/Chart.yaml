@@ -1,0 +1,11 @@
+apiVersion: v2
+name: inferbench
+description: Local-first benchmark console for OpenAI-compatible inference services
+type: application
+version: 0.1.0
+kubeVersion: ">=1.23.0-0"
+home: https://github.com/Yuki-0215/inferbench
+sources:
+  - https://github.com/Yuki-0215/inferbench
+annotations:
+  artifacthub.io/license: MIT

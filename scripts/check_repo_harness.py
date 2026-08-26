@@ -21,6 +21,13 @@ REQUIRED_PATHS = (
     "docs/product-specs/benchmark-contract.md",
     "docs/exec-plans/README.md",
     "docs/exec-plans/template.md",
+    "charts/inferbench/Chart.yaml",
+    "charts/inferbench/values.yaml",
+    "charts/inferbench/values.schema.json",
+    "charts/inferbench/templates/deployment.yaml",
+    "charts/inferbench/templates/service.yaml",
+    "charts/inferbench/templates/pvc.yaml",
+    "scripts/verify-helm.sh",
 )
 
 LAYERS = {
@@ -140,6 +147,19 @@ def check_release_invariants(errors: list[str]) -> None:
             fail(errors, f"image workflow is missing invariant: {expected}")
     if ":latest" in workflow:
         fail(errors, "image workflow must not publish latest")
+
+    chart_values = (ROOT / "charts/inferbench/values.yaml").read_text(encoding="utf-8")
+    deployment = (ROOT / "charts/inferbench/templates/deployment.yaml").read_text(
+        encoding="utf-8"
+    )
+    pvc = (ROOT / "charts/inferbench/templates/pvc.yaml").read_text(encoding="utf-8")
+    if not re.search(r'^\s*tag:\s*""\s*$', chart_values, re.MULTILINE):
+        fail(errors, "Helm image.tag must remain caller-supplied instead of hard-coded")
+    for expected in ("replicaCount must remain 1", "type: Recreate", "mountPath: /data"):
+        if expected not in deployment:
+            fail(errors, f"Helm deployment is missing SQLite invariant: {expected}")
+    if "helm.sh/resource-policy: keep" not in pvc:
+        fail(errors, "Helm PVC must be retained by default")
 
 
 def main() -> int:

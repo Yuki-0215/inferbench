@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "inferbench.fullname" . }}-test-connection
+  labels:
+    {{- include "inferbench.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: test
+spec:
+  automountServiceAccountToken: false
+  {{- with .Values.imagePullSecrets }}
+  imagePullSecrets:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  restartPolicy: Never
+  securityContext:
+    {{- toYaml .Values.podSecurityContext | nindent 4 }}
+  containers:
+    - name: health
+      image: {{ include "inferbench.image" . | quote }}
+      imagePullPolicy: {{ .Values.image.pullPolicy }}
+      command:
+        - python
+        - -c
+        - >-
+          import urllib.request;
+          urllib.request.urlopen(
+              "http://{{ include "inferbench.fullname" . }}:{{ .Values.service.port }}/api/health",
+              timeout=5,
+          )
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
