@@ -82,6 +82,7 @@ if "${HELM_BIN}" template inferbench "${ROOT_DIR}/charts/inferbench" \
   echo "chart unexpectedly accepted a plaintext API Key value" >&2
   exit 1
 fi
-grep -q 'Additional property value is not allowed' "${TASK_TMP_DIR}/plaintext-secret.log"
+grep -Eq "Additional property value is not allowed|additional properties 'value' not allowed" \
+  "${TASK_TMP_DIR}/plaintext-secret.log"
 
 echo "[helm] lint, default render, configured render and guardrails passed"
